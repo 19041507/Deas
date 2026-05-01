@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deas Finance</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0f1b2d;
+      --panel-2: #0b1626;
+      --border: #1c2b44;
+      --text: #eaf2ff;
+      --muted: #97a7c0;
+      --accent: #5ca8ff;
+      --accent-2: #2dd4bf;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #22c55e;
+      --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(92,168,255,.18), transparent 24%),
+        radial-gradient(circle at 85% 0%, rgba(45,212,191,.12), transparent 20%),
+        linear-gradient(180deg, #08111d 0%, #050b14 100%);
+      min-height: 100vh;
+    }
+
+    .screen { min-height: 100vh; }
+    .hidden { display: none !important; }
+
+    .container {
+      width: min(1280px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 36px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: var(--shadow);
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: .02em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }
+
+    .card-header { padding: 24px 24px 0; }
+    .card-body { padding: 24px; }
+
+    .title { margin: 0; font-size: 20px; }
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    /* AUTH */
+    .auth-grid {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 22px;
+      align-items: center;
+      min-height: calc(100vh - 64px);
+    }
+
+    @media (max-width: 980px) {
+      .auth-grid { grid-template-columns: 1fr; }
+    }
+
+    .hero {
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+      align-content: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(92,168,255,.12);
+      border: 1px solid rgba(92,168,255,.22);
+      color: #cfe5ff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 54px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      max-width: 12ch;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 58ch;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .hero-points {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 700px) {
+      .hero-points { grid-template-columns: 1fr; }
+    }
+
+    .point {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      color: #dce8f9;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .logo-panel {
+      padding: 18px;
+      border-radius: 24px;
+      background: rgba(255,255,255,.92);
+      box-shadow: var(--shadow);
+      width: min(100%, 620px);
+      overflow: hidden;
+    }
+
+    .logo-panel img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .auth-card {
+      justify-self: end;
+      width: min(100%, 480px);
+    }
+
+    @media (max-width: 980px) {
+      .auth-card { justify-self: stretch; width: 100%; }
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: .18s ease;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(92,168,255,.22), rgba(45,212,191,.16));
+      border-color: rgba(92,168,255,.45);
+    }
+
+    .form {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .field { display: grid; gap: 8px; }
+    label { font-size: 13px; color: #d8e4f5; }
+
+    input {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      outline: none;
+      background: rgba(7,17,31,.9);
+      color: var(--text);
+      font-size: 14px;
+      transition: .18s ease;
+    }
+
+    input:focus {
+      border-color: rgba(92,168,255,.78);
+      box-shadow: 0 0 0 4px rgba(92,168,255,.12);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 620px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      padding: 13px 16px;
+      border-radius: 14px;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      transition: transform .18s ease, opacity .18s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn.secondary {
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+    }
+
+    .msg {
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 12px 14px;
+      border-radius: 14px;
+      display: none;
+    }
+    .msg.show { display: block; }
+    .msg.error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25); color: #fecaca; }
+    .msg.success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.25); color: #bbf7d0; }
+    .msg.info { background: rgba(92,168,255,.12); border: 1px solid rgba(92,168,255,.25); color: #bfdbfe; }
+
+    /* APP */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 980px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .stats { grid-template-columns: 1fr; }
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(7,17,31,.75);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .stat .value {
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 800;
+      word-break: break-word;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 18px;
+      margin-top: 18px;
+      align-items: start;
+    }
+
+    @media (max-width: 980px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+
+    .section {
+      padding: 22px;
+      border-radius: 22px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .section h2 { margin: 0 0 8px; font-size: 18px; }
+    .section p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+    canvas {
+      width: 100%;
+      height: 290px;
+      display: block;
+      margin-top: 16px;
+      background: #09111d;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .loan-box { display: grid; gap: 12px; margin-top: 16px; }
+
+    .loan-status {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(7,17,31,.75);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .loan-status strong { display: block; margin-bottom: 8px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .badge.success { background: rgba(34,197,94,.15); color: #bbf7d0; }
+    .badge.danger { background: rgba(239,68,68,.15); color: #fecaca; }
+    .badge.warn { background: rgba(245,158,11,.15); color: #fde68a; }
+
+    .mini-list { display: grid; gap: 10px; margin-top: 14px; }
+
+    .mini-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+      font-size: 14px;
+    }
+
+    .mini-item span:last-child { color: #fff; font-weight: 800; }
+
+    .api-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 620px) {
+      .api-grid { grid-template-columns: 1fr; }
+    }
+
+    .api-item {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .api-item code {
+      display: block;
+      margin-top: 8px;
+      color: #bfe0ff;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <main id="authScreen" class="screen">
+    <div class="container">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-mark">D</div>
+          <div>
+            <h1>Deas Finance</h1>
+            <p>Banco digital com acesso seguro e análise automática</p>
+          </div>
+        </div>
+        <div class="pill">Entrada restrita para clientes</div>
+      </div>
+
+      <div class="auth-grid">
+        <section class="hero">
+          <div class="hero-badge">Open Finance · Firebase · Score automático</div>
+          <div style="display:grid; place-items:center; gap:18px; width:100%;">
+            <img
+              src="data:image/webp;base64,UklGRsw/AABXRUJQVlA4IMA/AAAQwACdASpeAVwBPjEYiUOiIaEiJFUqsEAGAAAwJaQAAQAAAEAAQABAAQAAAEAAQABAAAAP7+///+///+///+///+//////wAAAP8A/////wAAAP8AAAD///8AAAAAAAD///8AAAAAAAD///8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD///8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAA/////wAAAP8AAAAAAAD/////AAAAAA=="
+              alt="Deas Finance"
+              style="width:min(100%, 520px); max-width: 520px; height:auto; display:block; filter: drop-shadow(0 18px 35px rgba(0,0,0,.28));"
+            />
+            <p style="margin:0; color:#d6e6ff; font-size:18px; line-height:1.5; max-width: 28ch;">
+              Transformando dados em decisões financeiras mais inteligentes.
+            </p>
+          </div>
+        </section>
+
+        <section class="card auth-card">
+          <div class="card-header">
+            <h2 class="title">Acesso do usuário</h2>
+            <p class="subtitle">Faça o cadastro ou entre com sua conta para acessar o painel.</p>
+
+            <div class="tabs">
+              <button class="tab-btn active" id="registerTab">Cadastro</button>
+              <button class="tab-btn" id="loginTab">Login</button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div id="messageBox" class="msg"></div>
+
+            <form id="registerForm" class="form">
+              <div class="field">
+                <label for="regName">Nome</label>
+                <input id="regName" type="text" placeholder="Seu nome" />
+              </div>
+              <div class="field">
+                <label for="regEmail">Email</label>
+                <input id="regEmail" type="email" placeholder="email@exemplo.com" />
+              </div>
+              <div class="field">
+                <label for="regPassword">Senha</label>
+                <input id="regPassword" type="password" placeholder="••••••••" />
+              </div>
+              <div class="field">
+                <label for="regCpf">CPF</label>
+                <input id="regCpf" type="text" placeholder="000.000.000-00" />
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="regIncome">Renda mensal</label>
+                  <input id="regIncome" type="number" value="3500" />
+                </div>
+                <div class="field">
+                  <label for="regDebt">Dívida total</label>
+                  <input id="regDebt" type="number" value="1200" />
+                </div>
+              </div>
+
+              <button class="btn" type="submit">Criar conta</button>
+            </form>
+
+            <form id="loginForm" class="form hidden">
+              <div class="field">
+                <label for="loginEmail">Email</label>
+                <input id="loginEmail" type="email" placeholder="email@exemplo.com" />
+              </div>
+              <div class="field">
+                <label for="loginPassword">Senha</label>
+                <input id="loginPassword" type="password" placeholder="••••••••" />
+              </div>
+              <button class="btn" type="submit">Entrar</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <main id="appScreen" class="screen hidden">
+    <div class="container">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-mark">D</div>
+          <div>
+            <h1>Deas Finance</h1>
+            <p>Painel principal do banco</p>
+          </div>
+        </div>
+        <div class="pill" id="sessionPill">Sessão ativa</div>
+      </div>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="title">Painel do cliente</h2>
+          <p class="subtitle">Resumo financeiro, score automático e integração com a API dos parceiros.</p>
+        </div>
+
+        <div class="card-body">
+          <div class="stats">
+            <div class="stat"><div class="label">Cliente</div><div class="value" id="statName">-</div></div>
+            <div class="stat"><div class="label">CPF</div><div class="value" id="statCpf">-</div></div>
+            <div class="stat"><div class="label">Score</div><div class="value" id="statScore">-</div></div>
+            <div class="stat"><div class="label">Status</div><div class="value" id="statStatus">-</div></div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="section">
+              <h2>Score em gráfico</h2>
+              <p>O sistema calcula o score automaticamente com base na renda e nas dívidas do cliente.</p>
+              <canvas id="scoreCanvas" width="900" height="290"></canvas>
+              <div style="margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="btn" id="updateScoreBtn" type="button">Atualizar score</button>
+                <button class="btn secondary" id="logoutBtn" type="button">Sair</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <h2>Elegibilidade de empréstimo</h2>
+              <p>Decisão feita pelo banco, sem interferência manual do usuário.</p>
+              <div class="loan-box">
+                <div class="loan-status">
+                  <strong>Decisão</strong>
+                  <span class="badge" id="loanBadge">-</span>
+                  <div style="margin-top:10px; color: var(--muted); font-size: 14px;" id="loanReason">-</div>
+                </div>
+
+                <div class="mini-list">
+                  <div class="mini-item"><span>Renda</span><span id="miniIncome">-</span></div>
+                  <div class="mini-item"><span>Dívida total</span><span id="miniDebt">-</span></div>
+                  <div class="mini-item"><span>Ratio dívida/renda</span><span id="miniRatio">-</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid" style="margin-top:18px;">
+            <div class="section">
+              <h2>API Firebase entre os 4 bancos</h2>
+              <p>
+                Contrato único para compartilhar consentimento, perfil resumido e decisão de risco entre parceiros.
+              </p>
+              <div class="api-grid">
+                <div class="api-item">Criar consentimento<code>POST /api/v1/consents</code></div>
+                <div class="api-item">Sincronizar perfil<code>POST /api/v1/profiles/sync</code></div>
+                <div class="api-item">Consultar score<code>GET /api/v1/score/:uid</code></div>
+                <div class="api-item">Consultar risco<code>GET /api/v1/risk/:uid</code></div>
+              </div>
+              <div class="footer-note">
+                O backend pode ser feito com Firebase Auth + Firestore + Cloud Functions. Assim, os 4 bancos usam o mesmo formato de dados.
+              </div>
+            </div>
+
+            <div class="section">
+              <h2>Resumo da avaliação</h2>
+              <p>Campos mínimos para a análise financeira.</p>
+              <div class="mini-list">
+                <div class="mini-item"><span>Inadimplência</span><span id="miniRisk">-</span></div>
+                <div class="mini-item"><span>Limite interno</span><span id="miniLimit">-</span></div>
+                <div class="mini-item"><span>Conta ativa</span><span id="miniActive">-</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-note">
+            Este protótipo guarda os dados no navegador para teste rápido. Depois, você pode trocar a camada local por Firebase sem mudar a interface.
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "deasfinance_users_v2";
+    const SESSION_KEY = "deasfinance_session_uid_v2";
+
+    const authScreen = document.getElementById("authScreen");
+    const appScreen = document.getElementById("appScreen");
+
+    const registerTab = document.getElementById("registerTab");
+    const loginTab = document.getElementById("loginTab");
+    const registerForm = document.getElementById("registerForm");
+    const loginForm = document.getElementById("loginForm");
+    const messageBox = document.getElementById("messageBox");
+    const sessionPill = document.getElementById("sessionPill");
+
+    const statName = document.getElementById("statName");
+    const statCpf = document.getElementById("statCpf");
+    const statScore = document.getElementById("statScore");
+    const statStatus = document.getElementById("statStatus");
+    const loanBadge = document.getElementById("loanBadge");
+    const loanReason = document.getElementById("loanReason");
+    const miniIncome = document.getElementById("miniIncome");
+    const miniDebt = document.getElementById("miniDebt");
+    const miniRatio = document.getElementById("miniRatio");
+    const miniRisk = document.getElementById("miniRisk");
+    const miniLimit = document.getElementById("miniLimit");
+    const miniActive = document.getElementById("miniActive");
+
+    const scoreCanvas = document.getElementById("scoreCanvas");
+    const ctx = scoreCanvas.getContext("2d");
+    const updateScoreBtn = document.getElementById("updateScoreBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const fields = {
+      regName: document.getElementById("regName"),
+      regEmail: document.getElementById("regEmail"),
+      regPassword: document.getElementById("regPassword"),
+      regCpf: document.getElementById("regCpf"),
+      regIncome: document.getElementById("regIncome"),
+      regDebt: document.getElementById("regDebt"),
+      loginEmail: document.getElementById("loginEmail"),
+      loginPassword: document.getElementById("loginPassword"),
+    };
+
+    function loadUsers() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+      catch { return []; }
+    }
+
+    function saveUsers(users) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+    }
+
+    function uid() {
+      return Math.random().toString(36).slice(2, 10);
+    }
+
+    function clamp(n, min, max) {
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function setMessage(text, type = "info") {
+      messageBox.textContent = text;
+      messageBox.className = `msg show ${type}`;
+    }
+
+    function clearMessage() {
+      messageBox.textContent = "";
+      messageBox.className = "msg";
+    }
+
+    function showTab(tab) {
+      const isRegister = tab === "register";
+      registerTab.classList.toggle("active", isRegister);
+      loginTab.classList.toggle("active", !isRegister);
+      registerForm.classList.toggle("hidden", !isRegister);
+      loginForm.classList.toggle("hidden", isRegister);
+      clearMessage();
+    }
+
+    function maskCPF(cpf) {
+      const digits = String(cpf).replace(/\D/g, "");
+      if (digits.length !== 11) return cpf;
+      return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
+    }
+
+    function buildHistory(baseScore) {
+      const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
+      const offsets = [-30, -12, 6, 18, 28, 40];
+      return months.map((month, i) => ({ month, score: clamp(baseScore + offsets[i], 300, 1000) }));
+    }
+
+    function evaluate({ income, debtTotal }) {
+      const ratio = income > 0 ? debtTotal / income : 1;
+      const riskLevel = ratio >= 0.75 ? "alto" : ratio >= 0.45 ? "médio" : "baixo";
+      const canCreateLoan = ratio < 0.75;
+      const score = clamp(Math.round(900 - ratio * 520), 300, 1000);
+      const limit = canCreateLoan ? Math.max(0, Math.round(income * (1 - ratio) * 0.35)) : 0;
+      const reason = ratio >= 0.75
+        ? "Bloqueado: risco de inadimplência alto"
+        : ratio >= 0.45
+          ? "Liberado com análise"
+          : "Liberado";
+      return { ratio, riskLevel, canCreateLoan, score, limit, reason };
+    }
+
+    function getCurrentUser() {
+      const users = loadUsers();
+      const sessionUid = localStorage.getItem(SESSION_KEY);
+      return users.find((u) => u.uid === sessionUid) || null;
+    }
+
+    function setScreen(loggedIn) {
+      authScreen.classList.toggle("hidden", loggedIn);
+      appScreen.classList.toggle("hidden", !loggedIn);
+    }
+
+    function drawChart(data) {
+      const w = scoreCanvas.width;
+      const h = scoreCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#09111d";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "rgba(148,163,184,.12)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = 30 + i * 40;
+        ctx.beginPath();
+        ctx.moveTo(40, y);
+        ctx.lineTo(w - 20, y);
+        ctx.stroke();
+      }
+
+      if (!data || data.length === 0) {
+        ctx.fillStyle = "rgba(148,163,184,.8)";
+        ctx.font = "16px Arial";
+        ctx.fillText("Sem dados para o gráfico", 40, 50);
+        return;
+      }
+
+      const paddingLeft = 50;
+      const paddingRight = 25;
+      const paddingTop = 20;
+      const paddingBottom = 45;
+      const chartW = w - paddingLeft - paddingRight;
+      const chartH = h - paddingTop - paddingBottom;
+      const minScore = 300;
+      const maxScore = 1000;
+
+      const points = data.map((item, index) => {
+        const x = paddingLeft + (chartW / Math.max(data.length - 1, 1)) * index;
+        const normalized = (item.score - minScore) / (maxScore - minScore);
+        const y = paddingTop + (1 - normalized) * chartH;
+        return { x, y, month: item.month, score: item.score };
+      });
+
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.strokeStyle = "#5ca8ff";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      points.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = "#2dd4bf";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      ctx.fillStyle = "rgba(234,242,255,.9)";
+      ctx.font = "13px Arial";
+      points.forEach((p) => ctx.fillText(p.month, p.x - 12, h - 16));
+      ctx.fillStyle = "rgba(151,167,192,.9)";
+      ctx.font = "12px Arial";
+      ctx.fillText("1000", 8, paddingTop + 5);
+      ctx.fillText("300", 8, paddingTop + chartH);
+    }
+
+    function renderDashboard() {
+      const user = getCurrentUser();
+      const logged = Boolean(user);
+      setScreen(logged);
+
+      if (!logged) {
+        sessionPill.textContent = "Nenhuma sessão ativa";
+        statName.textContent = "-";
+        statCpf.textContent = "-";
+        statScore.textContent = "-";
+        statStatus.textContent = "-";
+        loanBadge.textContent = "-";
+        loanBadge.className = "badge";
+        loanReason.textContent = "Faça login para ver a análise.";
+        miniIncome.textContent = "-";
+        miniDebt.textContent = "-";
+        miniRatio.textContent = "-";
+        miniRisk.textContent = "-";
+        miniLimit.textContent = "-";
+        miniActive.textContent = "-";
+        drawChart([]);
+        return;
+      }
+
+      const result = evaluate({ income: user.income, debtTotal: user.debtTotal });
+      const status = result.score >= 700 ? "Bom" : result.score >= 550 ? "Médio" : "Baixo";
+
+      sessionPill.textContent = `Logado: ${user.name}`;
+      statName.textContent = user.name;
+      statCpf.textContent = maskCPF(user.cpf);
+      statScore.textContent = result.score;
+      statStatus.textContent = status;
+
+      loanBadge.textContent = result.canCreateLoan ? "Pode criar empréstimo" : "Bloqueado";
+      loanBadge.className = `badge ${result.canCreateLoan ? "success" : "danger"}`;
+      loanReason.textContent = result.reason;
+
+      miniIncome.textContent = `R$ ${Number(user.income).toFixed(2)}`;
+      miniDebt.textContent = `R$ ${Number(user.debtTotal).toFixed(2)}`;
+      miniRatio.textContent = `${(result.ratio * 100).toFixed(1)}%`;
+      miniRisk.textContent = result.riskLevel.toUpperCase();
+      miniLimit.textContent = `R$ ${result.limit.toFixed(2)}`;
+      miniActive.textContent = result.canCreateLoan ? "Sim" : "Não";
+
+      drawChart(user.scoreHistory);
+    }
+
+    registerTab.addEventListener("click", () => showTab("register"));
+    loginTab.addEventListener("click", () => showTab("login"));
+
+    registerForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      clearMessage();
+
+      const name = fields.regName.value.trim();
+      const email = fields.regEmail.value.trim();
+      const password = fields.regPassword.value.trim();
+      const cpf = fields.regCpf.value.trim();
+      const income = Number(fields.regIncome.value);
+      const debtTotal = Number(fields.regDebt.value);
+
+      if (!name || !email || !password || !cpf) {
+        setMessage("Preencha nome, email, senha e CPF.", "error");
+        return;
+      }
+
+      const users = loadUsers();
+      const exists = users.some((u) => u.email.toLowerCase() === email.toLowerCase());
+      if (exists) {
+        setMessage("Já existe um usuário com esse email.", "error");
+        return;
+      }
+
+      const result = evaluate({ income, debtTotal });
+      const user = {
+        uid: uid(),
+        name,
+        email,
+        password,
+        cpf,
+        income,
+        debtTotal,
+        score: result.score,
+        canCreateLoan: result.canCreateLoan,
+        createdAt: new Date().toISOString(),
+        scoreHistory: buildHistory(result.score),
+      };
+
+      users.unshift(user);
+      saveUsers(users);
+      localStorage.setItem(SESSION_KEY, user.uid);
+      setMessage("Cadastro realizado com sucesso.", "success");
+      renderDashboard();
+    });
+
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      clearMessage();
+
+      const email = fields.loginEmail.value.trim();
+      const password = fields.loginPassword.value.trim();
+      const users = loadUsers();
+      const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+
+      if (!user) {
+        setMessage("Usuário ou senha inválidos.", "error");
+        return;
+      }
+
+      localStorage.setItem(SESSION_KEY, user.uid);
+      setMessage("Login realizado com sucesso.", "success");
+      renderDashboard();
+    });
+
+    updateScoreBtn.addEventListener("click", () => {
+      const users = loadUsers();
+      const sessionUid = localStorage.getItem(SESSION_KEY);
+      const index = users.findIndex((u) => u.uid === sessionUid);
+      if (index === -1) return;
+
+      const user = users[index];
+      const result = evaluate({ income: user.income, debtTotal: user.debtTotal });
+      const nextScore = clamp(result.score + Math.floor(Math.random() * 31) - 10, 300, 1000);
+      const nextHistory = [...(user.scoreHistory || []).slice(-5), { month: "Atual", score: nextScore }];
+      const refreshed = evaluate({ income: user.income, debtTotal: user.debtTotal });
+
+      users[index] = {
+        ...user,
+        score: nextScore,
+        canCreateLoan: refreshed.canCreateLoan,
+        scoreHistory: nextHistory,
+      };
+
+      saveUsers(users);
+      setMessage("Score atualizado.", "info");
+      renderDashboard();
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem(SESSION_KEY);
+      setMessage("Sessão encerrada.", "info");
+      renderDashboard();
+      showTab("login");
+    });
+
+    window.addEventListener("resize", () => renderDashboard());
+
+    showTab("register");
+    renderDashboard();
+  </script>
+</body>
+</html>
