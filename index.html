@@ -69,7 +69,24 @@
 }
 @media(max-width:620px){.login-benefits{grid-template-columns:1fr}.login-benefits .benefit-card{min-height:auto}}
 
-  </style>
+  
+/* Correção definitiva da logo: não usa gradient id nem imagem externa */
+.deas-logo-icon{
+  background:linear-gradient(145deg,#071226,#0c1830)!important;
+  border:1px solid rgba(242,184,75,.34)!important;
+  overflow:visible!important;
+}
+.deas-logo-icon svg,
+.deas-logo-icon .deas-svg-logo{
+  display:block!important;
+  width:80%!important;
+  height:80%!important;
+  opacity:1!important;
+  visibility:visible!important;
+  filter:drop-shadow(0 6px 12px rgba(242,184,75,.25));
+}
+.logo .deas-logo-icon.small svg{width:78%!important;height:78%!important;}
+</style>
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -78,7 +95,12 @@
     <div class="auth-shell">
       <section class="brand-panel">
         <div class="brand-logo-block">
-          <div class="login-logo"><div class="deas-logo-icon"><svg viewBox="0 0 96 96" aria-hidden="true" focusable="false"><defs><linearGradient id="deasGold" x1="16" y1="14" x2="80" y2="84" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffd977"/><stop offset="0.48" stop-color="#f2b84b"/><stop offset="1" stop-color="#c98920"/></linearGradient></defs><path d="M48 7 78 17v30c0 19-12 34-30 42-18-8-30-23-30-42V17L48 7Zm0 8.6L26 23v23.8c0 13.8 8.1 25.4 22 32.6 13.9-7.2 22-18.8 22-32.6V23l-22-7.4Z" fill="url(#deasGold)"/><path d="M31 55h9v14h-9V55Zm14-10h9v24h-9V45Zm14-12h9v36h-9V33Z" fill="url(#deasGold)"/><path d="M17 66c17 18 48 8 61-22" fill="none" stroke="url(#deasGold)" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="36" r="5.5" fill="url(#deasGold)"/></svg></div><div class="deas-wordmark"><span>Deas</span><b>Finance</b></div></div>
+          <div class="login-logo"><div class="deas-logo-icon"><svg viewBox="0 0 96 96" aria-hidden="true" focusable="false" class="deas-svg-logo">
+  <path d="M48 7 78 17v30c0 19-12 34-30 42-18-8-30-23-30-42V17L48 7Zm0 8.6L26 23v23.8c0 13.8 8.1 25.4 22 32.6 13.9-7.2 22-18.8 22-32.6V23l-22-7.4Z" fill="#f2b84b"/>
+  <path d="M31 55h9v14h-9V55Zm14-10h9v24h-9V45Zm14-12h9v36h-9V33Z" fill="#ffd977"/>
+  <path d="M17 66c17 18 48 8 61-22" fill="none" stroke="#f2b84b" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="80" cy="36" r="5.5" fill="#ffd977"/>
+</svg></div><div class="deas-wordmark"><span>Deas</span><b>Finance</b></div></div>
           <div class="brand-copy">
             <h2>Controle financeiro com segurança e clareza.</h2>
             <p>Gerencie saldo, limite, movimentações e conexões Open Finance em uma experiência digital simples, privada e profissional.</p>
@@ -107,7 +129,12 @@
   </main>
 
   <main class="app-page hidden" id="appPage">
-    <aside class="sidebar"><div class="logo"><div class="deas-logo-icon small"><svg viewBox="0 0 96 96" aria-hidden="true" focusable="false"><defs><linearGradient id="deasGold" x1="16" y1="14" x2="80" y2="84" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffd977"/><stop offset="0.48" stop-color="#f2b84b"/><stop offset="1" stop-color="#c98920"/></linearGradient></defs><path d="M48 7 78 17v30c0 19-12 34-30 42-18-8-30-23-30-42V17L48 7Zm0 8.6L26 23v23.8c0 13.8 8.1 25.4 22 32.6 13.9-7.2 22-18.8 22-32.6V23l-22-7.4Z" fill="url(#deasGold)"/><path d="M31 55h9v14h-9V55Zm14-10h9v24h-9V45Zm14-12h9v36h-9V33Z" fill="url(#deasGold)"/><path d="M17 66c17 18 48 8 61-22" fill="none" stroke="url(#deasGold)" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="36" r="5.5" fill="url(#deasGold)"/></svg></div><strong>Deas Finance</strong></div><div class="side-note">Open Finance com consentimento: o outro banco recebe apenas dados mínimos para análise.</div><nav><button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button><button class="nav-btn" type="button" data-view="operations">Operações</button><button class="nav-btn" type="button" data-view="credit">Crédito</button><button class="nav-btn" type="button" data-view="openFinance">Open Finance</button><button class="nav-btn" type="button" data-view="profile">Perfil</button></nav><button class="logout-btn" type="button" id="logoutBtn">Sair da conta</button></aside>
+    <aside class="sidebar"><div class="logo"><div class="deas-logo-icon small"><svg viewBox="0 0 96 96" aria-hidden="true" focusable="false" class="deas-svg-logo">
+  <path d="M48 7 78 17v30c0 19-12 34-30 42-18-8-30-23-30-42V17L48 7Zm0 8.6L26 23v23.8c0 13.8 8.1 25.4 22 32.6 13.9-7.2 22-18.8 22-32.6V23l-22-7.4Z" fill="#f2b84b"/>
+  <path d="M31 55h9v14h-9V55Zm14-10h9v24h-9V45Zm14-12h9v36h-9V33Z" fill="#ffd977"/>
+  <path d="M17 66c17 18 48 8 61-22" fill="none" stroke="#f2b84b" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="80" cy="36" r="5.5" fill="#ffd977"/>
+</svg></div><strong>Deas Finance</strong></div><div class="side-note">Open Finance com consentimento: o outro banco recebe apenas dados mínimos para análise.</div><nav><button class="nav-btn active" type="button" data-view="dashboard">Dashboard</button><button class="nav-btn" type="button" data-view="operations">Operações</button><button class="nav-btn" type="button" data-view="credit">Crédito</button><button class="nav-btn" type="button" data-view="openFinance">Open Finance</button><button class="nav-btn" type="button" data-view="profile">Perfil</button></nav><button class="logout-btn" type="button" id="logoutBtn">Sair da conta</button></aside>
     <section class="content"><header class="topbar"><div><p class="eyebrow">Bem-vindo de volta</p><h2 id="welcomeName">Olá, Daniel</h2></div><div class="profile-pill"><img id="profilePhoto" alt="Foto do usuário" /><span id="userDisplayName">Cliente Deas</span></div></header>
       <section class="view active" id="dashboard"><div class="grid cards-grid"><article class="card"><div class="score-ring" id="scoreRing"><span id="creditScore">500</span></div><h3>Score de crédito</h3><p class="muted">Usado para simular análise de crédito.</p></article><article class="card"><span class="label">Saldo disponível</span><strong class="big" id="balanceValue">R$ 0,00</strong><button class="secondary-btn" type="button" data-open-modal="depositDialog">Depositar</button></article><article class="card"><span class="label">Dívida pendente</span><strong class="big" id="debtValue">R$ 0,00</strong><button class="secondary-btn" type="button" data-open-modal="payDebtDialog">Pagar dívida</button></article><article class="card"><span class="label">Limite disponível</span><strong class="big" id="limitValue">R$ 0,00</strong><button class="secondary-btn" type="button" data-open-modal="pixDialog">Fazer Pix</button></article></div><article class="card table-card"><h3>Movimentações recentes</h3><p class="muted">Registros salvos no Firebase.</p><div class="table-wrap"><table><thead><tr><th>Descrição</th><th>Data</th><th>Valor</th><th>Status</th></tr></thead><tbody id="transactionsBody"></tbody></table></div></article></section>
       <section class="view" id="operations"><div class="grid three-cols"><article class="card"><p class="eyebrow">Entrada</p><h3>Adicionar depósito</h3><p class="muted">Simule dinheiro entrando na conta.</p><button class="primary-btn" type="button" data-open-modal="depositDialog">Novo depósito</button></article><article class="card"><p class="eyebrow">Transferência</p><h3>Pix</h3><p class="muted">Registre uma saída via Pix.</p><button class="primary-btn" type="button" data-open-modal="pixDialog">Enviar Pix</button></article><article class="card"><p class="eyebrow">Dívida</p><h3>Pagamento</h3><p class="muted">Reduza sua dívida com saldo disponível.</p><button class="primary-btn" type="button" data-open-modal="payDebtDialog">Pagar dívida</button></article></div></section>
