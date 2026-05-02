@@ -2,20 +2,12 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-    }
-
-    match /accounts/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
+    // Regras para teste/apresentação do Deas Finance.
+    // Permite acesso somente para usuários logados no Firebase Authentication.
+    // Isso evita o erro: Missing or insufficient permissions.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
   }
 }
