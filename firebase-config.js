@@ -1,5 +1,5 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyCCfx1qpB8VkIyOfIX05QqMFmsY_7L7q-M",
+apiKey: "AIzaSyCCfx1qpBgVkIyOfIX05QqMFmsY_7L7q-M",
   authDomain: "deas-finance.firebaseapp.com",
   projectId: "deas-finance",
   storageBucket: "deas-finance.firebasestorage.app",
