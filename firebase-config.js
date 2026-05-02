@@ -1,6 +1,3 @@
-// Configuração real do projeto Firebase: Deas Finance
-// Projeto: deas-finance
-
 export const firebaseConfig = {
   apiKey: "AIzaSyCCfx1qpB8VkIyOfIX05QqMFmsY_7L7q-M",
   authDomain: "deas-finance.firebaseapp.com",
