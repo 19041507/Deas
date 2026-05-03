@@ -1367,6 +1367,490 @@ ofV15PersistFinanceMutualScore = async function(mutualScore, extras = {}) {
     });
 };
 
+
+/* ===================== V20 - MOTOR COESO OPEN FINANCE E SCORE DINAMICO ===================== */
+function v20ClampFinanceScore(value) {
+  return Math.max(0, Math.min(1000, Math.round(Number(value || 0))));
+}
+
+function v20FinanceSnapshot(account = currentAccount || {}) {
+  const score = Number(account.creditScore || account.openFinanceScoreBase || account.openFinanceMutualScore || 500);
+  return {
+    externalBalance: Number(account.balance || 0),
+    externalDebt: Number(account.debt || 0),
+    externalLimit: Number(account.limit || 0),
+    loansTotal: Number(account.loansTotal || 0),
+    investmentsTotal: Number(account.investmentsTotal || account.investments || 0),
+    estimatedIncome: Number(account.estimatedIncome || 3500),
+    creditScore: score,
+    externalScore: score,
+    sharedScore: score,
+    updatedAtText: new Date().toISOString()
+  };
+}
+
+function v20PartnerSnapshotFinance(data = {}) {
+  const d = data.requestedData || {};
+  return {
+    externalBalance: Number(data.externalBalance || d.externalBalance || 0),
+    externalDebt: Number(data.externalDebt || d.externalDebt || 0),
+    externalLimit: Number(data.externalLimit || d.externalLimit || 0),
+    loansTotal: Number(data.loansTotal || data.externalLoans || d.loansTotal || 0),
+    investmentsTotal: Number(data.investmentsTotal || d.investmentsTotal || 0),
+    estimatedIncome: Number(data.estimatedIncome || data.externalIncome || d.estimatedIncome || data.importedSalary || data.transferAmount || d.importedSalary || 0),
+    creditScore: Number(data.creditScore || data.externalScore || data.sharedScore || data.mutualScore || d.creditScore || 0)
+  };
+}
+
+function v20UnifiedFinanceScore(local = {}, partner = {}) {
+  const localScore = Number(local.creditScore || 500);
+  const partnerScore = Number(partner.creditScore || 0);
+  let next = partnerScore > 0 ? Math.round((localScore + partnerScore) / 2) : localScore;
+  const totalDebt = Number(local.externalDebt || 0) + Number(partner.externalDebt || 0);
+  const totalIncome = Number(local.estimatedIncome || 0) + Number(partner.estimatedIncome || 0);
+  const totalBalance = Number(local.externalBalance || 0) + Number(partner.externalBalance || 0);
+  const debtRatio = totalDebt / Math.max(1000, totalIncome || 3000);
+
+  if (debtRatio >= 1.8) {
+    next -= 115;
+  } else if (debtRatio >= 1.1) {
+    next -= 75;
+  } else if (debtRatio >= 0.65) {
+    next -= 40;
+  } else if (totalDebt > 0) {
+    next -= 14;
+  } else {
+    next += 14;
+  }
+
+  if (totalIncome >= 12000) {
+    next += 42;
+  } else if (totalIncome >= 8000) {
+    next += 28;
+  } else if (totalIncome >= 4500) {
+    next += 16;
+  } else if (totalIncome > 0 && totalIncome < 2500) {
+    next -= 18;
+  }
+
+  if (totalBalance >= Math.max(1500, totalIncome * 0.5)) {
+    next += 18;
+  } else if (totalBalance < 0) {
+    next -= 28;
+  }
+
+  return v20ClampFinanceScore(next);
+}
+
+function v20FinanceDynamicScore(account = {}) {
+  const base = Number(account.openFinanceScoreBase || account.openFinanceMutualScore || account.creditScore || 500);
+  const debt = Number(account.debt || 0);
+  const balance = Number(account.balance || 0);
+  const income = Number(account.estimatedIncome || 3500);
+  const loans = Number(account.loansTotal || 0);
+  const debtRatio = debt / Math.max(1000, income || 3500);
+  let next = base;
+
+  if (debtRatio >= 1.8) {
+    next -= 120;
+  } else if (debtRatio >= 1.1) {
+    next -= 80;
+  } else if (debtRatio >= 0.65) {
+    next -= 45;
+  } else if (debt > 0) {
+    next -= 18;
+  } else {
+    next += 22;
+  }
+
+  if (loans > 0) {
+    next -= Math.min(60, Math.round(loans / 230));
+  }
+
+  if (balance >= income && income > 0) {
+    next += 30;
+  } else if (balance >= income * 0.45 && income > 0) {
+    next += 14;
+  } else if (balance < 100) {
+    next -= 18;
+  }
+
+  return v20ClampFinanceScore(next);
+}
+
+async function v20BroadcastFinanceSnapshot(reason = "atualizacao_deasfinance") {
+  if (!db || !currentUser) {
+    return;
+  }
+
+  const snapshot = v20FinanceSnapshot(currentAccount || {});
+
+  try {
+    await setDoc(doc(db, "users", currentUser.uid, "openFinanceConnections", "deasbank"), {
+      latestLocalSnapshot: snapshot,
+      latestScore: snapshot.creditScore,
+      latestScoreReason: reason,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Não foi possível atualizar espelho local do Deas Finance:", error.message);
+  }
+
+  try {
+    const snap = await getDocs(collection(db, "openFinanceRequests"));
+    const writes = [];
+    snap.forEach(docSnap => {
+      const r = docSnap.data() || {};
+      const belongs = r.userId === currentUser.uid
+        || String(r.sourceBank || "").toLowerCase() === "deas finance"
+        || String(r.partnerBank || "").toLowerCase().includes("deas");
+      if (belongs) {
+        writes.push(setDoc(doc(db, "openFinanceRequests", docSnap.id), {
+          latestSourceSnapshot: snapshot,
+          latestScore: snapshot.creditScore,
+          scoreRefreshReason: reason,
+          scoreRefreshAt: serverTimestamp()
+        }, { merge: true }));
+      }
+    });
+    await Promise.allSettled(writes);
+  } catch (error) {
+    console.warn("Broadcast de score do Deas Finance não concluído:", error.message);
+  }
+
+  try {
+    const local = await getDoc(doc(db, "users", currentUser.uid, "openFinanceConnections", "deasbank"));
+    const localData = local.exists() ? local.data() : {};
+    const requestId = localData.partnerRequestId || localData.sharedPayload?.partnerRequestId;
+    if (requestId && deasBankDb) {
+      await setDoc(doc(deasBankDb, "openFinanceRequests", requestId), {
+        latestPartnerSnapshot: snapshot,
+        latestPartnerScore: snapshot.creditScore,
+        scoreRefreshReason: reason
+      }, { merge: true });
+    }
+  } catch (error) {
+    console.warn("Não foi possível avisar o DeasBank agora. Ele recalcula ao sincronizar:", error.message);
+  }
+}
+
+updateAccount = async function(next) {
+  const merged = {
+    ...currentAccount,
+    ...next
+  };
+
+  if (!merged.openFinanceScoreBase) {
+    merged.openFinanceScoreBase = Number(merged.openFinanceMutualScore || merged.creditScore || 500);
+  }
+
+  const score = v20FinanceDynamicScore(merged);
+  const payload = {
+    ...next,
+    openFinanceScoreBase: merged.openFinanceScoreBase,
+    creditScore: score,
+    lastScoreUpdatedAt: new Date().toISOString()
+  };
+
+  await updateDoc(doc(db, "accounts", currentUser.uid), payload);
+  currentAccount = {
+    ...merged,
+    ...payload
+  };
+  await v20BroadcastFinanceSnapshot("atualizacao_conta_deasfinance");
+  closeDialogs();
+  await refresh();
+  return currentAccount;
+};
+
+async function v20PersistFinanceMutualScore(mutualScore, extras = {}) {
+  const ref = doc(db, "accounts", currentUser.uid);
+  const snap = await getDoc(ref);
+  const base = snap.exists() ? snap.data() : (currentAccount || {});
+  const dynamicInput = {
+    ...base,
+    ...extras,
+    openFinanceScoreBase: mutualScore,
+    openFinanceMutualScore: mutualScore
+  };
+  const dynamicScore = v20FinanceDynamicScore(dynamicInput);
+  const payload = {
+    ...extras,
+    openFinanceScoreBase: mutualScore,
+    openFinanceMutualScore: mutualScore,
+    creditScore: dynamicScore,
+    lastOpenFinanceScoreImpact: dynamicScore - Number(base.creditScore || 500),
+    lastScoreUpdatedAt: new Date().toISOString()
+  };
+  await updateDoc(ref, payload);
+  currentAccount = {
+    ...base,
+    ...payload
+  };
+  await v20BroadcastFinanceSnapshot("sync_openfinance_deasfinance");
+  return currentAccount;
+}
+
+window.approveIncomingOpenFinance = async(id, type = "") => safeAction(async() => {
+  const ref = doc(db, "openFinanceRequests", id);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    throw new Error("Pedido não encontrado.");
+  }
+
+  const request = {
+    id,
+    ...snap.data()
+  };
+  const requestType = type || request.requestType || "connection_request";
+  const currentStatus = request.status || (requestType === "data_transfer_request" ? "data_pending" : "connection_pending");
+
+  if (currentStatus === "data_approved" || currentStatus === "connection_approved") {
+    throw new Error("Esse pedido já foi aprovado.");
+  }
+
+  const freshSnap = await getDoc(doc(db, "accounts", currentUser.uid));
+  const fresh = freshSnap.exists() ? freshSnap.data() : currentAccount;
+  const localSnapshot = v20FinanceSnapshot(fresh);
+  const partnerSnapshot = v20PartnerSnapshotFinance(request);
+  const mutualScore = v20UnifiedFinanceScore(localSnapshot, partnerSnapshot);
+  const status = requestType === "data_transfer_request" ? "data_approved" : "connection_approved";
+  const payload = {
+    status,
+    connectionStatus: status,
+    connectionApproved: true,
+    sameOwner: true,
+    mutualScore,
+    sharedScore: mutualScore,
+    creditScore: mutualScore,
+    externalScore: mutualScore,
+    ...localSnapshot,
+    analysisMessage: requestType === "data_transfer_request"
+      ? "Deas Finance aprovou o envio de salário/dados. O DeasBank deve sincronizar para receber o dinheiro."
+      : "Deas Finance aprovou a conexão. Score e dados básicos foram considerados.",
+    analyzedAt: serverTimestamp()
+  };
+
+  if (requestType === "data_transfer_request") {
+    const requestedAmount = Number(request.requestedData?.requestedSalaryAmount || request.requestedData?.importedSalary || request.importedSalary || request.transferAmount || 0);
+
+    if (requestedAmount > Number(fresh.balance || 0)) {
+      throw new Error(`Saldo disponível insuficiente no Deas Finance para transferir ${money(requestedAmount)}. Disponível: ${money(fresh.balance || 0)}.`);
+    }
+
+    const moveId = request.moneyMoveId || `move_${id}`;
+    const appliedKey = `${moveId}_origem_deasfinance`;
+    const appliedMoves = fresh.openFinanceAppliedMoves || {};
+    let accountAfterDebit = fresh;
+
+    if (requestedAmount > 0 && !appliedMoves[appliedKey]) {
+      accountAfterDebit = {
+        ...fresh,
+        balance: Number(fresh.balance || 0) - requestedAmount,
+        openFinanceAppliedMoves: {
+          ...appliedMoves,
+          [appliedKey]: true
+        }
+      };
+      await updateDoc(doc(db, "accounts", currentUser.uid), accountAfterDebit);
+      currentAccount = accountAfterDebit;
+      await addTransaction({
+        creditor: "Salário enviado para DeasBank",
+        value: -requestedAmount,
+        status: "pago",
+        type: "Open Finance"
+      });
+    }
+
+    const updatedSnapshot = v20FinanceSnapshot(accountAfterDebit);
+    Object.assign(payload, {
+      ...updatedSnapshot,
+      importedSalary: requestedAmount,
+      transferAmount: requestedAmount,
+      moneyMoved: requestedAmount > 0,
+      moneyMoveId: moveId,
+      sourceDebited: true,
+      transferSourceBank: "Deas Finance",
+      transferDestinationBank: "DeasBank",
+      relationshipSummary: `Deas Finance enviou ${money(requestedAmount)} para o DeasBank. Saldo atual ${money(updatedSnapshot.externalBalance)}, dívidas ${money(updatedSnapshot.externalDebt)} e score ${updatedSnapshot.creditScore}.`
+    });
+    payload.requestedData = {
+      importedSalary: requestedAmount,
+      requestedSalaryAmount: requestedAmount,
+      externalBalance: updatedSnapshot.externalBalance,
+      externalDebt: updatedSnapshot.externalDebt,
+      externalLimit: updatedSnapshot.externalLimit,
+      loansTotal: updatedSnapshot.loansTotal,
+      investmentsTotal: updatedSnapshot.investmentsTotal,
+      estimatedIncome: updatedSnapshot.estimatedIncome,
+      creditScore: updatedSnapshot.creditScore,
+      relationshipSummary: payload.relationshipSummary
+    };
+  } else {
+    payload.relationshipSummary = `Conexão mútua ativa. Score unificado ${mutualScore}. Saldo ${money(localSnapshot.externalBalance)}, renda ${money(localSnapshot.estimatedIncome)} e dívidas ${money(localSnapshot.externalDebt)}.`;
+  }
+
+  await updateDoc(ref, payload);
+  await v20PersistFinanceMutualScore(mutualScore, v20PartnerSnapshotFinance(request));
+  await setDoc(doc(db, "users", currentUser.uid, "openFinanceConnections", "deasbank"), {
+    connectionStatus: status,
+    connectionApproved: true,
+    mutualScore,
+    sharedPayload: {
+      ...request,
+      ...payload,
+      partnerRequestId: id,
+      connectionStatus: status
+    },
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  toast(requestType === "data_transfer_request"
+    ? "Aprovado. Agora sincronize no DeasBank para o dinheiro entrar lá."
+    : `Conexão aprovada. Score recalculado: ${currentAccount.creditScore}.`);
+
+  await refresh();
+});
+
+async function v20SyncFinance() {
+  const localRef = doc(db, "users", currentUser.uid, "openFinanceConnections", "deasbank");
+  const localSnap = await getDoc(localRef);
+
+  if (!localSnap.exists()) {
+    throw new Error("Nenhuma solicitação DeasBank encontrada.");
+  }
+
+  const local = localSnap.data() || {};
+  const requestId = ofV14PickFinanceRequestId(local);
+
+  if (!requestId) {
+    throw new Error("Não encontrei o ID da solicitação enviada ao DeasBank.");
+  }
+
+  const partnerSnap = await getDoc(doc(deasBankDb, "openFinanceRequests", requestId));
+
+  if (!partnerSnap.exists()) {
+    throw new Error("A solicitação ainda não apareceu no DeasBank.");
+  }
+
+  const partner = {
+    id: requestId,
+    ...partnerSnap.data()
+  };
+  const rawStatus = String(partner.status || "connection_pending");
+  const effectiveStatus = rawStatus === "data_denied" ? "connection_approved" : rawStatus;
+  const freshSnap = await getDoc(doc(db, "accounts", currentUser.uid));
+  let account = freshSnap.exists() ? freshSnap.data() : currentAccount;
+  const localSnapshot = v20FinanceSnapshot(account);
+  const partnerSnapshot = v20PartnerSnapshotFinance(partner);
+  const mutualScore = Number(partner.mutualScore || v20UnifiedFinanceScore(localSnapshot, partnerSnapshot));
+  const update = {
+    connectionStatus: effectiveStatus,
+    connectionApproved: ["connection_approved", "data_pending", "data_approved"].includes(effectiveStatus),
+    mutualScore,
+    sharedScore: mutualScore,
+    externalScore: partnerSnapshot.creditScore,
+    externalDebt: partnerSnapshot.externalDebt,
+    externalIncome: partnerSnapshot.estimatedIncome,
+    externalBalance: partnerSnapshot.externalBalance,
+    sharedPayload: {
+      ...(local.sharedPayload || {}),
+      ...partner,
+      partnerRequestId: requestId,
+      connectionStatus: effectiveStatus
+    },
+    updatedAt: serverTimestamp()
+  };
+
+  if (rawStatus === "data_approved") {
+    const amount = Number(partner.transferAmount || partner.importedSalary || partner.requestedData?.importedSalary || 0);
+    const moveId = String(partner.moneyMoveId || local.moneyMoveId || `move_${requestId}`);
+    const applyKey = `${moveId}_destino_deasfinance`;
+    const appliedMoves = account.openFinanceAppliedMoves || {};
+
+    if (partner.moneyMoved && amount > 0 && !appliedMoves[applyKey]) {
+      account = {
+        ...account,
+        balance: Number(account.balance || 0) + amount,
+        openFinanceAppliedMoves: {
+          ...appliedMoves,
+          [applyKey]: true
+        }
+      };
+      await updateDoc(doc(db, "accounts", currentUser.uid), account);
+      currentAccount = account;
+      await addTransaction({
+        creditor: "Salário recebido do DeasBank",
+        value: amount,
+        status: "pago",
+        type: "Open Finance"
+      });
+      update.importedSalary = amount;
+      update.moneyMovedApplied = true;
+      update.appliedMoneyMoveId = moveId;
+    }
+  }
+
+  await v20PersistFinanceMutualScore(mutualScore, {
+    externalScore: partnerSnapshot.creditScore,
+    externalDebt: partnerSnapshot.externalDebt,
+    externalIncome: partnerSnapshot.estimatedIncome,
+    externalBalance: partnerSnapshot.externalBalance
+  });
+  await setDoc(localRef, update, { merge: true });
+  toast(rawStatus === "data_approved"
+    ? `Sincronizado. Dinheiro recebido e score recalculado: ${currentAccount.creditScore}.`
+    : `Sincronizado. Score recalculado: ${currentAccount.creditScore}.`);
+  await refresh();
+}
+
+(function v20InstallFinanceSyncButton() {
+  const sync = document.getElementById("syncOpenFinanceBtn");
+  if (!sync) {
+    return;
+  }
+
+  const clone = sync.cloneNode(true);
+  clone.addEventListener("click", () => safeAction(v20SyncFinance));
+  sync.replaceWith(clone);
+})();
+
+const v20PreviousRenderConnectionsFinance = renderConnections;
+renderConnections = function(list = []) {
+  v20PreviousRenderConnectionsFinance(list);
+
+  const c = ofV9ActiveConnection(list);
+
+  if (!c) {
+    return;
+  }
+
+  const salary = Number(c.importedSalary || c.sharedPayload?.importedSalary || c.sharedPayload?.transferAmount || c.externalIncome || c.sharedPayload?.estimatedIncome || 0);
+  const score = Number(c.mutualScore || c.sharedPayload?.mutualScore || currentAccount?.creditScore || 0);
+  const balance = Number(c.externalBalance || c.sharedPayload?.externalBalance || 0);
+  const debt = Number(c.externalDebt || c.sharedPayload?.externalDebt || 0);
+  const income = Number(c.externalIncome || c.sharedPayload?.estimatedIncome || salary || 0);
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = value;
+    }
+  };
+
+  setText("ofImportedSalaryFinance", money(salary || income || 0));
+  setText("ofExternalIncomeFinance", money(income || 0));
+  setText("ofExternalScoreFinance", score || "-");
+  setText("ofExternalBalanceFinance", money(balance || 0));
+  setText("ofExternalDebtFinance", money(debt || 0));
+
+  const summary = document.getElementById("ofRelationshipSummaryFinance");
+  if (summary) {
+    summary.textContent = `Conexão ativa. Salário/renda ${money(income || salary || 0)}, saldo parceiro ${money(balance || 0)}, dívidas ${money(debt || 0)} e score unificado ${score || currentAccount?.creditScore || "-"}.`;
+  }
+};
+
 </script>
 </body>
 </html>
