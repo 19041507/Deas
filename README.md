@@ -1,4 +1,4 @@
-# Deas Finance
+# Deas Finance.
 
 ## Firebase
 
