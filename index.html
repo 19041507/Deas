@@ -263,7 +263,7 @@
             <p class="eyebrow">Open Finance</p>
             <h3>Portabilidade de salário / Trazer salário</h3>
             <p class="muted">Essa opção só fica disponível depois que o DeasBank aceitar a conexão. Ao solicitar, o DeasBank poderá liberar salário, saldo, dívidas, cartões/limite, empréstimos, investimentos e score.</p>
-            <button class="primary-btn" type="button" data-open-modal="openFinanceDataDialog" id="openDataTransferBtn">Trazer salário e dados do DeasBank</button>
+            <button class="primary-btn" type="button" data-open-modal="openFinanceDataDialog" id="openDataTransferBtn">Trazer salário</button>
           </article>
         </div>
 
@@ -333,7 +333,7 @@
   <dialog id="payDebtDialog"><form class="modal-body" id="payDebtForm"><div class="modal-head" style="padding:0 0 16px"><h3>Pagar dívida</h3><p class="muted">O pagamento usa seu saldo disponível.</p></div><label class="field">Valor<input id="payDebtAmount" type="number" min="1" step="0.01" value="500" required></label><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Pagar</button></div></form></dialog>
   <dialog id="loanDialog"><form class="modal-body" id="loanForm"><div class="modal-head" style="padding:0 0 16px"><h3>Solicitar empréstimo</h3><p class="muted">A aprovação usa score, saldo, dívida e Open Finance.</p></div><div id="loanDecision" class="consent-box"></div><label class="field">Valor desejado<input id="loanAmount" type="number" min="100" step="50" value="1000" required></label><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Solicitar</button></div></form></dialog>
   <dialog id="openFinanceDialog"><form class="modal-body" id="openFinanceForm"><div class="modal-head" style="padding:0 0 16px"><h3>Conectar DeasBank</h3><p class="muted">Essa etapa conecta a conta da mesma pessoa no DeasBank. Nenhum salário, saldo, dívida ou limite é transferido ainda.</p></div><label class="field">Instituição<select id="partnerInstitution" required><option value="deasbank" selected>DeasBank</option></select></label><div class="consent-box"><strong>Você está autorizando:</strong><ul class="mini-list"><li>Enviar uma solicitação de conexão ao DeasBank.</li><li>Confirmar que a conta pertence ao mesmo usuário.</li><li>Permitir que o DeasBank aceite ou recuse a conexão.</li><li>Não transferir renda, saldo, dívidas ou limite nessa etapa.</li></ul><label class="check-row"><input type="checkbox" id="openFinanceConsent" required><span>Autorizo solicitar conexão com o DeasBank</span></label></div><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Enviar conexão</button></div></form></dialog>
-  <dialog id="openFinanceDataDialog"><form class="modal-body" id="openFinanceDataForm"><div class="modal-head" style="padding:0 0 16px"><h3>Trazer renda e dados do DeasBank</h3><p class="muted">Solicite ao DeasBank a liberação completa dos dados financeiros. O valor informado é o salário/renda que será movimentado, e os outros dados serão preenchidos pelo DeasBank na hora da aprovação.</p></div><div class="salary-slider-wrap"><label class="field">Quanto de salário/renda quer trazer?<input id="ofSalaryAmount" type="number" min="0" step="100" value="3200" required></label><input id="ofSalaryRange" type="range" min="0" max="15000" step="100" value="3200"><p class="muted">Esse valor só entra no Deas Finance se o DeasBank aprovar e tiver saldo suficiente.</p></div><div class="openfinance-preview"><div class="of-metric"><span>Renda/salário</span><strong>Solicitado</strong></div><div class="of-metric"><span>Saldo</span><strong>Vem do DeasBank</strong></div><div class="of-metric"><span>Dívidas</span><strong>Vem do DeasBank</strong></div><div class="of-metric"><span>Limite/Score</span><strong>Vem do DeasBank</strong></div></div><div class="consent-box"><strong>Você está ciente de que serão solicitados:</strong><ul class="mini-list"><li>Renda/salário para transferência entre contas.</li><li>Saldo atual e faixa de movimentação do DeasBank.</li><li>Dívidas, empréstimos e compromissos financeiros.</li><li>Limite disponível, score e relacionamento de crédito.</li></ul><label class="check-row"><input type="checkbox" id="openFinanceDataConsent" required><span>Estou ciente e autorizo solicitar essa transferência completa</span></label></div><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Solicitar transferência</button></div></form></dialog>
+  <dialog id="openFinanceDataDialog"><form class="modal-body" id="openFinanceDataForm"><div class="modal-head" style="padding:0 0 16px"><h3>Trazer salário do DeasBank</h3><p class="muted">Solicite ao DeasBank a liberação completa dos dados financeiros. O valor informado é o salário/renda que será movimentado, e os outros dados serão preenchidos pelo DeasBank na hora da aprovação.</p></div><div class="salary-slider-wrap"><label class="field">Quanto de salário/renda quer trazer?<input id="ofSalaryAmount" type="number" min="0" step="100" value="3200" required></label><input id="ofSalaryRange" type="range" min="0" max="15000" step="100" value="3200"><p class="muted">Esse valor só entra no Deas Finance se o DeasBank aprovar e tiver saldo suficiente.</p></div><div class="openfinance-preview"><div class="of-metric"><span>Renda/salário</span><strong>Solicitado</strong></div><div class="of-metric"><span>Saldo</span><strong>Vem do DeasBank</strong></div><div class="of-metric"><span>Dívidas</span><strong>Vem do DeasBank</strong></div><div class="of-metric"><span>Limite/Score</span><strong>Vem do DeasBank</strong></div></div><div class="consent-box"><strong>Você está ciente de que serão solicitados:</strong><ul class="mini-list"><li>Renda/salário para transferência entre contas.</li><li>Saldo atual e faixa de movimentação do DeasBank.</li><li>Dívidas, empréstimos e compromissos financeiros.</li><li>Limite disponível, score e relacionamento de crédito.</li></ul><label class="check-row"><input type="checkbox" id="openFinanceDataConsent" required><span>Estou ciente e autorizo solicitar essa transferência completa</span></label></div><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Trazer salário</button></div></form></dialog>
   <dialog id="photoDialog"><form class="modal-body" id="photoForm"><div class="modal-head" style="padding:0 0 16px"><h3>Alterar foto de perfil</h3><p class="muted">Escolha qualquer foto do computador/celular, cole um link ou arraste uma imagem para cá. O sistema reduz a foto automaticamente antes de salvar no perfil, sem usar o campo limitado de foto do Authentication.</p></div><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><img id="photoPreview" class="photo-preview" alt="Prévia da foto"><div><span class="profile-photo-badge">Prévia em tempo real</span><p class="security-note">Aceita fotos grandes e vários formatos de imagem suportados pelo navegador. A imagem é comprimida para caber no perfil.</p></div></div><div class="photo-uploader" id="photoDropZone"><strong>Solte sua foto aqui</strong><small>Ou clique em “Escolher foto”. Também funciona colando um link de imagem abaixo.</small><button class="secondary-btn" type="button" id="choosePhotoBtn">Escolher foto</button><input id="photoFileInput" class="file-hidden" type="file" accept="image/*"></div><div class="photo-tools"><label class="field">Link da foto<input id="photoUrlInput" type="url" placeholder="https://exemplo.com/minha-foto.jpg"></label><div class="photo-source-row"><button class="ghost-btn" type="button" id="clearPhotoChoiceBtn">Limpar escolha</button><button class="secondary-btn" type="button" id="useCurrentPhotoBtn">Usar foto atual</button></div></div><div class="modal-actions"><button class="secondary-btn" type="button" data-close-modal>Cancelar</button><button class="primary-btn" type="submit">Salvar foto</button></div></form></dialog>
 
   <script type="module">
@@ -1200,6 +1200,78 @@ renderConnections = function(list=[]){
     badge.textContent = 'Conexão ativa';
     badge.className = 'status ok';
   }
+};
+
+
+
+/* ===================== HOTFIX V16 - DEAS FINANCE MOSTRA SALARIO AO CONECTAR ===================== */
+function ofV16PartnerSalaryFromConnection(c={}){
+  const p = c.sharedPayload || {};
+  const d = p.requestedData || {};
+  return Number(c.externalIncome || c.estimatedIncome || p.estimatedIncome || p.externalIncome || d.estimatedIncome || p.importedSalary || d.importedSalary || 0);
+}
+function ofV16PartnerDebtFromConnection(c={}){
+  const p = c.sharedPayload || {}, d = p.requestedData || {};
+  return Number(c.externalDebt || p.externalDebt || d.externalDebt || 0);
+}
+function ofV16PartnerBalanceFromConnection(c={}){
+  const p = c.sharedPayload || {}, d = p.requestedData || {};
+  return Number(c.externalBalance || p.externalBalance || d.externalBalance || 0);
+}
+function ofV16PartnerScoreFromConnection(c={}){
+  const p = c.sharedPayload || {}, d = p.requestedData || {};
+  return Number(c.mutualScore || p.mutualScore || c.externalScore || p.externalScore || p.creditScore || d.creditScore || 0);
+}
+(function ofV16PolishFinanceLabels(){
+  const btn = document.getElementById('openDataTransferBtn');
+  if (btn) btn.textContent = 'Trazer salário';
+  const modalTitle = document.querySelector('#openFinanceDataDialog h3');
+  if (modalTitle) modalTitle.textContent = 'Trazer salário do DeasBank';
+  const submit = document.querySelector('#openFinanceDataForm .primary-btn[type="submit"]');
+  if (submit) submit.textContent = 'Trazer salário';
+})();
+const ofV16PreviousRenderConnections = renderConnections;
+renderConnections = function(list=[]){
+  ofV16PreviousRenderConnections(list);
+  const c = ofV9ActiveConnection(list);
+  if (!c) return;
+  const p = c.sharedPayload || {};
+  const status = String(c.connectionStatus || p.connectionStatus || p.status || '');
+  const approved = ['connection_approved','data_pending','data_approved','data_denied'].includes(status) || c.connectionApproved === true;
+  const container = document.getElementById('connectionsList');
+  if (!container || !approved) return;
+  const salary = ofV16PartnerSalaryFromConnection(c);
+  const score = ofV16PartnerScoreFromConnection(c);
+  const debt = ofV16PartnerDebtFromConnection(c);
+  const balance = ofV16PartnerBalanceFromConnection(c);
+  const imported = Number(p.importedSalary || c.importedSalary || p.transferAmount || 0);
+  const badge = status === 'data_approved' ? 'Dados recebidos' : 'Conexão ativa';
+  const cls = status === 'data_denied' ? 'ok' : (status === 'data_approved' || status === 'connection_approved' || status === 'data_pending' ? 'ok' : '');
+
+  const salaryLabel = status === 'data_approved' && imported > 0 ? 'Salário trazido' : 'Salário no DeasBank';
+  const salaryValue = status === 'data_approved' && imported > 0 ? money(imported) : (salary ? money(salary) : 'Não informado');
+  const nextText = status === 'data_pending' ? 'Aguardando aprovação' : (status === 'data_approved' ? 'Concluído' : 'Trazer salário');
+
+  container.innerHTML = `
+    <div class="connection-item of-v16-connection">
+      <div style="width:100%">
+        <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap">
+          <div>
+            <strong>DeasBank conectado</strong>
+            <p class="muted">Mesma pessoa, bancos diferentes. A conexão usa os dados do parceiro para análise mútua.</p>
+          </div>
+          <span class="status ${cls}">${badge}</span>
+        </div>
+        <div class="of-connection-body" style="margin-top:16px">
+          <div class="of-metric"><span>${salaryLabel}</span><strong>${salaryValue}</strong></div>
+          <div class="of-metric"><span>Score unificado</span><strong>${score || currentAccount?.openFinanceMutualScore || currentAccount?.creditScore || '-'}</strong></div>
+          <div class="of-metric"><span>Dívidas DeasBank</span><strong>${money(debt)}</strong></div>
+          <div class="of-metric"><span>Saldo DeasBank</span><strong>${money(balance)}</strong></div>
+          <div class="of-metric"><span>Próxima ação</span><strong>${nextText}</strong></div>
+        </div>
+        <small class="muted">E-mail enviado: ${p.emailMasked || p.maskedEmail || 'mascarado'} · Senha nunca compartilhada · ${p.relationshipSummary || 'Conexão Open Finance ativa.'}</small>
+      </div>
+    </div>`;
 };
 
 </script>
