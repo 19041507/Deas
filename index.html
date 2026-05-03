@@ -107,6 +107,13 @@
 .of-app-state{border:1px dashed var(--line);border-radius:18px;padding:16px;background:rgba(255,255,255,.035);color:var(--muted);line-height:1.55}
 .of-state-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 @media(max-width:980px){.of-clean-steps{grid-template-columns:1fr}}
+
+/* Open Finance V8 - estados sem espaços vazios */
+.of-app-state{padding:18px!important;border-radius:18px!important;background:rgba(242,184,75,.08)!important;border:1px solid rgba(242,184,75,.16)!important}
+.of-professional-grid.of-single{grid-template-columns:minmax(0,1fr)!important;max-width:780px!important}
+#connectionsList:empty{display:none!important}
+#disconnectOpenFinanceBtn:not(.hidden){display:inline-flex!important;align-items:center;justify-content:center}
+
 </style>
 </head>
 <body>
@@ -220,7 +227,7 @@
             <div>
               <p class="eyebrow">Dados recebidos</p>
               <h3>Visão unificada das contas</h3>
-              <p class="muted">Quando o DeasBank aprovar a solicitação, os dados aparecem aqui e o salário cai no saldo real do Deas Finance.</p>
+              <p class="muted">Quando o DeasBank aprovar a solicitação, os dados aparecem aqui e o salário cai no saldo disponível do Deas Finance.</p>
             </div>
             <span class="status ok">Somente com consentimento</span>
           </div>
@@ -320,12 +327,32 @@
         return `<div class="of-request-card ${done?'done':''}"><div class="of-request-top"><div><strong>${r.sourceBank||'DeasBank'} pediu ${isData?'renda e dados completos':'conexão'}</strong><p class="muted">${r.userName||'Cliente'} · ${r.emailMasked||'e-mail mascarado'} · senha nunca compartilhada</p></div><span class="status ${ofStatusClass(st)}">${ofStatusLabel(st,r.requestType)}</span></div>${infoGrid}<ul class="mini-list"><li>Finalidade: ${r.purpose||'Open Finance'}</li><li>${isData?'Ao aceitar, o Deas Finance envia salário/renda, saldo, dívidas, limite, empréstimos, score e movimenta o valor solicitado se houver saldo.':'Depois da conexão aceita, cada banco pode solicitar dados financeiros separadamente.'}</li></ul>${!done?`<div class="of-actions-clean"><button class="primary-btn" type="button" onclick="window.approveIncomingOpenFinance('${r.id}','${r.requestType||''}')">Aceitar</button><button class="secondary-btn" type="button" onclick="window.denyIncomingOpenFinance('${r.id}','${r.requestType||''}')">Recusar</button></div>`:`<small class="muted">${r.analysisMessage||'Pedido analisado.'}</small>`}</div>`
       }).join('')+`</div>`;
     }
+
+    async function mirrorConnectionToBothSidesFromFinance(request,status){
+      const approved=status==='connection_approved'||status==='data_approved'||status==='data_denied';
+      const score=Number((currentAccount&&currentAccount.creditScore)||500);
+      const payload={institutionName:'DeasBank',partnerKey:'deasbank',connectionMode:'firebase_mutual_openfinance',connectionStatus:status,connectionApproved:approved,sameOwner:true,partnerRequestId:request.id||request.partnerRequestId||null,sharedScore:score,sharedPayload:{...request,status,connectionStatus:status,sameOwner:true,sharedScore:score},updatedAt:serverTimestamp()};
+      try{await setDoc(doc(db,'users',currentUser.uid,'openFinanceConnections','deasbank'),payload,{merge:true})}catch(e){console.warn('mirror finance local failed',e)}
+      if(request&&request.userId&&deasBankDb){
+        try{await setDoc(doc(deasBankDb,'users',request.userId,'openFinanceConnections','deasfinance'),{institutionName:'Deas Finance',partnerKey:'deasfinance',connectionMode:'firebase_mutual_openfinance',connectionStatus:status,connectionApproved:approved,sameOwner:true,partnerRequestId:request.id||request.partnerRequestId||null,sharedScore:score,sharedPayload:{...request,status,connectionStatus:status,sameOwner:true,sharedScore:score},updatedAt:serverTimestamp()},{merge:true})}catch(e){console.warn('mirror bank remote failed',e)}
+      }
+    }
+    async function creditDeasBankDestinationFromFinance(bankUid,amount,moveId){
+      amount=Number(amount||0); if(!bankUid||!deasBankDb||amount<=0)return {applied:false,reason:'sem_valor'};
+      const safe=String((moveId||'openfinance')+'_destino_deasbank').replace(/[^a-zA-Z0-9_-]/g,'_');
+      const ref=doc(deasBankDb,'users',bankUid); const snap=await getDoc(ref); const user=snap.exists()?snap.data():{saldo:0}; const applied=user.openFinanceAppliedMoves||{};
+      if(applied[safe])return {applied:false,reason:'ja_aplicado'};
+      const nextSaldo=Number(user.saldo||0)+amount;
+      await setDoc(ref,{...user,saldo:nextSaldo,[`openFinanceAppliedMoves.${safe}`]:true,lastOpenFinanceMoveId:safe,lastOpenFinanceMoveReason:'Portabilidade recebida do Deas Finance',updatedAt:serverTimestamp()},{merge:true});
+      return {applied:true,nextSaldo};
+    }
+
     window.approveIncomingOpenFinance=async(id,type='')=>safeAction(async()=>{
       const ref=doc(db,'openFinanceRequests',id);const snap=await getDoc(ref);if(!snap.exists())throw new Error('Pedido não encontrado.');
       const r=snap.data();const t=type||r.requestType;const currentStatus=r.status||(t==='data_transfer_request'?'data_pending':'connection_pending');
       if(currentStatus==='data_approved'||currentStatus==='connection_approved')throw new Error('Esse pedido já foi aprovado.');
       const status=t==='data_transfer_request'?'data_approved':'connection_approved';
-      const payload={status,analysisMessage:t==='data_transfer_request'?'Dados financeiros, histórico e portabilidade liberados pelo Deas Finance.':'Conexão aceita pelo Deas Finance.',analyzedAt:serverTimestamp()};
+      const payload={status,sameOwner:true,connectionApproved:true,sharedScore:Number(currentAccount?.creditScore||500),creditScore:Number(currentAccount?.creditScore||500),analysisMessage:t==='data_transfer_request'?'Dados financeiros, histórico e portabilidade liberados pelo Deas Finance.':'Conexão aceita pelo Deas Finance. A conexão agora vale para os dois bancos.',analyzedAt:serverTimestamp()};
       if(t==='data_transfer_request'){
         const requested=Number(r.requestedData?.requestedSalaryAmount||r.requestedData?.importedSalary||r.importedSalary||0); const amount=Math.max(0,requested);
         const freshSnap=await getDoc(doc(db,'accounts',currentUser.uid)); const fresh=freshSnap.exists()?freshSnap.data():currentAccount;
@@ -339,7 +366,9 @@
         payload.requestedData={importedSalary:amount,requestedSalaryAmount:amount,externalBalance,externalDebt,externalLimit,loansTotal,creditScore:score,estimatedIncome:income,investmentsTotal,relationshipSummary:payload.relationshipSummary};
         if(amount>0&&result.applied)await addTransaction({creditor:'Portabilidade enviada para DeasBank',value:-amount,status:'pago',type:'Open Finance'});
       }
-      await updateDoc(ref,payload);toast(status==='data_approved'?'Dados liberados. O DeasBank deve sincronizar para o valor cair no saldo real.':'Conexão aceita.');await refresh();
+      if(t==='connection_request'){await mirrorConnectionToBothSidesFromFinance({id,...r},status);} 
+      if(t==='data_transfer_request'){await mirrorConnectionToBothSidesFromFinance({id,...r},status); if(payload.moneyMoved&&payload.importedSalary>0&&r.userId){const dest=await creditDeasBankDestinationFromFinance(r.userId,payload.importedSalary,payload.moneyMoveId); payload.destinationCredited=dest.applied||payload.destinationCredited||false;}}
+      await updateDoc(ref,payload);toast(status==='data_approved'?'Dados liberados. O valor foi creditado no saldo disponível do DeasBank.':'Conexão aceita. Ela agora vale nos dois bancos.');await refresh();
     });
     window.denyIncomingOpenFinance=async(id,type='')=>safeAction(async()=>{const status=type==='data_transfer_request'?'data_denied':'connection_denied';await updateDoc(doc(db,'openFinanceRequests',id),{status,analysisMessage:type==='data_transfer_request'?'Dados recusados pelo Deas Finance.':'Conexão recusada pelo Deas Finance.',analyzedAt:serverTimestamp()});toast('Solicitação recusada.');await renderIncomingOpenFinanceRequests();});
 
@@ -382,7 +411,7 @@
         hideProfessionalBlocks();
         disconnectBtn?.classList.add('hidden');
         setHeader('Nenhuma conexão ativa','Sem conexão','');
-        $('#connectionsList').innerHTML=`<div class="of-app-state"><strong>Conecte uma instituição para começar.</strong><p class="muted" style="margin:8px 0 0">Como em uma aplicação real, a visão unificada, dados financeiros e portabilidade de salário só aparecem depois do consentimento. Clique em “Conectar DeasBank” no topo para solicitar a conexão.</p><div class="of-state-actions"><button class="primary-btn" type="button" onclick="document.getElementById('openFinanceDialog').showModal()">Conectar DeasBank</button></div></div>`;
+        $('#connectionsList').innerHTML=`<div class="of-app-state"><strong>Nenhuma instituição conectada.</strong><p class="muted" style="margin:8px 0 0">Use o botão “Conectar DeasBank” para iniciar. Antes do aceite, o Deas Finance não exibe cartões vazios de visão unificada.</p></div>`;
         return;
       }
       const payload=c.sharedPayload||{};
@@ -523,7 +552,7 @@
         const partnerSnap=await getDoc(doc(deasBankDb,'openFinanceRequests',requestId)); if(!partnerSnap.exists())throw new Error('A solicitação ainda não apareceu no DeasBank.');
         const partner=partnerSnap.data(); const status=partner.status||'connection_pending'; const sharedPayload={...(local.sharedPayload||{}),...partner,partnerRequestId:requestId,connectionStatus:status};
         if(status==='connection_approved'){
-          await setDoc(localRef,{connectionStatus:'connection_approved',connectionApproved:true,sharedPayload,updatedAt:serverTimestamp()},{merge:true}); toast('Conexão aceita no DeasBank. Portabilidade de salário liberada.');
+          await setDoc(localRef,{connectionStatus:'connection_approved',connectionApproved:true,sharedScore:Number(partner.creditScore||partner.sharedScore||0),externalScore:Number(partner.creditScore||partner.sharedScore||0),sharedPayload,updatedAt:serverTimestamp()},{merge:true}); const scoreFromBank=Number(partner.creditScore||partner.sharedScore||0); if(scoreFromBank){const fs=await getDoc(doc(db,'accounts',currentUser.uid)); const fa=fs.exists()?fs.data():currentAccount; await updateDoc(doc(db,'accounts',currentUser.uid),{creditScore:Math.max(Number(fa.creditScore||500),scoreFromBank)});} toast('Conexão aceita no DeasBank. Portabilidade de salário liberada.');
         }else if(status==='connection_denied'){
           await setDoc(localRef,{connectionStatus:'connection_denied',connectionApproved:false,sharedPayload,updatedAt:serverTimestamp()},{merge:true}); toast('A conexão foi negada no DeasBank.');
         }else if(status==='data_approved'){
@@ -533,7 +562,7 @@
           const freshSnap=await getDoc(doc(db,'accounts',currentUser.uid)); const fresh=freshSnap.exists()?freshSnap.data():currentAccount; const improvedScore=Math.min(900,Math.max(Number(fresh.creditScore||500),externalScore)+(importedSalary>=3000?25:0)+(externalDebt<=1000?15:0));
           await updateDoc(doc(db,'accounts',currentUser.uid),{estimatedIncome:Math.max(Number(fresh.estimatedIncome||0),externalIncome,importedSalary),externalDebt,externalBalance,externalLimit,externalLoans:loansTotal,externalInvestments:investmentsTotal,externalScore,creditScore:improvedScore});
           await setDoc(localRef,{connectionStatus:'data_approved',connectionApproved:true,importedSalary,externalBalance,externalDebt,externalLimit,externalLoans:loansTotal,externalInvestments:investmentsTotal,externalScore,externalIncome,relationshipSummary:partner.relationshipSummary||'',appliedMoneyMoveId:moveId,moneyMovedApplied:true,sharedPayload,updatedAt:serverTimestamp()},{merge:true});
-          toast(applied?'Portabilidade concluída: o salário caiu no saldo real do Deas Finance.':'Dados sincronizados. O dinheiro não foi duplicado.');
+          toast(applied?'Portabilidade concluída: o salário caiu no saldo disponível do Deas Finance.':'Dados sincronizados. O dinheiro não foi duplicado.');
         }else if(status==='data_denied'){
           await setDoc(localRef,{connectionStatus:'data_denied',connectionApproved:true,sharedPayload,updatedAt:serverTimestamp()},{merge:true}); toast('A transferência foi negada no DeasBank.');
         }else if(status==='consent_revoked'){
