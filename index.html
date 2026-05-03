@@ -1274,6 +1274,99 @@ renderConnections = function(list=[]){
     </div>`;
 };
 
+
+
+/* ===================== V19 - PERMISSAO, SCORE DINAMICO E PORTABILIDADE SEGURA ===================== */
+const v19OriginalCreditDeasBankDestinationFromFinance = creditDeasBankDestinationFromFinance;
+creditDeasBankDestinationFromFinance = async function(bankUid, amount, moveId) {
+    try {
+        return await v19OriginalCreditDeasBankDestinationFromFinance(bankUid, amount, moveId);
+    } catch (error) {
+        console.warn("Não foi possível creditar diretamente no DeasBank. O crédito será aplicado quando o DeasBank sincronizar:", error.message);
+
+        return {
+            applied: false,
+            pending: true,
+            reason: "permission_or_remote_rules",
+            error: error.message
+        };
+    }
+};
+
+function v19ClampFinanceScore(value) {
+    return Math.max(0, Math.min(1000, Math.round(Number(value || 0))));
+}
+
+function v19FinanceScoreBase(account = {}) {
+    return Number(account.openFinanceScoreBase || account.openFinanceMutualScore || account.creditScore || 500);
+}
+
+function v19FinanceDynamicScore(account = {}) {
+    const base = v19FinanceScoreBase(account);
+    const debt = Number(account.debt || 0);
+    const balance = Number(account.balance || 0);
+    const income = Number(account.estimatedIncome || 3500);
+    const loans = Number(account.loansTotal || 0);
+    const debtRatio = debt / Math.max(1000, income || 3500);
+    let next = base;
+
+    if (debtRatio >= 2) {
+        next -= 120;
+    } else if (debtRatio >= 1.2) {
+        next -= 80;
+    } else if (debtRatio >= 0.65) {
+        next -= 45;
+    } else if (debt > 0) {
+        next -= 18;
+    } else {
+        next += 18;
+    }
+
+    if (loans > 0) {
+        next -= Math.min(55, Math.round(loans / 250));
+    }
+
+    if (balance >= income && income > 0) {
+        next += 25;
+    } else if (balance >= income * 0.5 && income > 0) {
+        next += 12;
+    } else if (balance < 0) {
+        next -= 30;
+    }
+
+    return v19ClampFinanceScore(next);
+}
+
+const v19OriginalFinanceUpdateAccount = updateAccount;
+updateAccount = async function(next) {
+    const merged = {
+        ...currentAccount,
+        ...next
+    };
+
+    if (!merged.openFinanceScoreBase) {
+        merged.openFinanceScoreBase = Number(merged.openFinanceMutualScore || merged.creditScore || 500);
+    }
+
+    const dynamicScore = v19FinanceDynamicScore(merged);
+
+    return await v19OriginalFinanceUpdateAccount({
+        ...next,
+        openFinanceScoreBase: merged.openFinanceScoreBase,
+        creditScore: dynamicScore,
+        lastScoreUpdatedAt: new Date().toISOString()
+    });
+};
+
+const v19OriginalOfV15PersistFinanceMutualScore = ofV15PersistFinanceMutualScore;
+ofV15PersistFinanceMutualScore = async function(mutualScore, extras = {}) {
+    return await v19OriginalOfV15PersistFinanceMutualScore(mutualScore, {
+        ...extras,
+        openFinanceScoreBase: mutualScore,
+        openFinanceMutualScore: mutualScore
+    });
+};
+
 </script>
 </body>
 </html>
