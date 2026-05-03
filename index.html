@@ -151,13 +151,21 @@
 @media(max-width:900px){#openFinance .of-connection-body{grid-template-columns:1fr}}
 
 
-#openFinance .of-pro-hero{border-radius:28px!important;background:linear-gradient(135deg,rgba(255,248,234,.98),rgba(255,224,163,.95))!important;border:1px solid rgba(120,72,0,.12)!important;box-shadow:0 18px 45px rgba(92,50,0,.08)!important;}
+#openFinance .of-pro-hero{border-radius:28px!important;background:linear-gradient(135deg,rgba(242,184,75,.20),rgba(12,22,42,.96) 55%,rgba(9,16,31,.98))!important;border:1px solid rgba(242,184,75,.24)!important;box-shadow:0 24px 70px rgba(0,0,0,.28)!important;color:var(--text)!important;}
+#openFinance .of-pro-hero h3,#openFinance .of-pro-hero p,#openFinance .of-pro-hero .muted{color:var(--text)!important;}
 #openFinance .of-professional-grid{grid-template-columns:1.15fr .85fr!important;}
-#openFinance .of-pro-card{border-radius:28px!important;background:rgba(255,255,255,.86)!important;box-shadow:0 18px 40px rgba(92,50,0,.06)!important;}
+#openFinance .of-pro-card{border-radius:28px!important;background:linear-gradient(180deg,rgba(20,34,59,.96),rgba(12,22,42,.96))!important;border:1px solid rgba(255,255,255,.10)!important;box-shadow:0 18px 48px rgba(0,0,0,.22)!important;color:var(--text)!important;}
 #openFinance .of-timeline{display:none!important;}
-#openFinance .of-list-tools{background:#fff4de!important;border-radius:999px!important;padding:6px!important;border:1px solid rgba(120,72,0,.08)!important;}
-#openFinance .of-filter{border-radius:999px!important;}
-#openFinance .of-request-card,#openFinance .connection-item{border-radius:24px!important;background:#fffaf2!important;border-color:rgba(120,72,0,.10)!important;}
+#openFinance .of-list-tools,#openFinance .of-filter-tabs{background:rgba(255,255,255,.055)!important;border-radius:999px!important;padding:6px!important;border:1px solid rgba(255,255,255,.10)!important;}
+#openFinance .of-filter{border-radius:999px!important;color:#cbd5e1!important;}
+#openFinance .of-filter.active,#openFinance .of-filter:hover{background:linear-gradient(135deg,rgba(242,184,75,.30),rgba(255,211,111,.16))!important;color:#fff!important;}
+#openFinance .of-request-card,#openFinance .connection-item,#openFinance .of-compact-row{border-radius:24px!important;background:rgba(255,255,255,.045)!important;border-color:rgba(255,255,255,.10)!important;color:var(--text)!important;}
+#openFinance .of-history-summary,#openFinance .of-empty-clean,#openFinance .of-no-empty-state{background:rgba(255,255,255,.035)!important;color:#cbd5e1!important;border-color:rgba(255,255,255,.12)!important;}
+#openFinance .of-metric,#openFinance .of-data-grid>div,#openFinance .of-pro-data-grid div{background:rgba(255,255,255,.050)!important;border-color:rgba(255,255,255,.10)!important;}
+#openFinance .muted,#openFinance small{color:#9fb0c8!important;}
+#openFinance strong,#openFinance h3{color:#f8fafc!important;}
+#openFinance .primary-btn{background:linear-gradient(135deg,var(--gold),var(--gold2))!important;color:#111827!important;}
+#openFinance .secondary-btn{background:rgba(255,255,255,.075)!important;color:#fff!important;border:1px solid rgba(255,255,255,.12)!important;}
 
 </style>
 </head>
@@ -352,7 +360,8 @@
     async function renderIncomingOpenFinanceRequests(){
       const box=$('#incomingOpenFinanceList'); if(!box||!db)return;
       const snap=await getDocs(collection(db,'openFinanceRequests'));
-      const list=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>!(Array.isArray(r.hiddenForUsers)&&currentUser&&r.hiddenForUsers.includes(currentUser.uid))).filter(r=>String(r.sourceBank||'').toLowerCase()==='deasbank'||String(r.direction||'').includes('deasfinance'));
+      const localHiddenFinance=JSON.parse(localStorage.getItem('deasfinance_openfinance_hidden_'+(currentUser?.uid||'anon'))||'[]');
+      const list=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>!localHiddenFinance.includes(r.id)).filter(r=>!(Array.isArray(r.hiddenForUsers)&&currentUser&&r.hiddenForUsers.includes(currentUser.uid))).filter(r=>String(r.sourceBank||'').toLowerCase()==='deasbank'||String(r.direction||'').includes('deasfinance'));
       list.sort((a,b)=>String(b.createdAtText||'').localeCompare(String(a.createdAtText||'')));
       const statusOf=r=>r.status||(r.requestType==='data_transfer_request'?'data_pending':'connection_pending');
       const pending=list.filter(r=>!isOpenFinanceDone(statusOf(r)));
@@ -368,8 +377,8 @@
       }
       box.innerHTML=header+`<div class="of-request-list">`+active.slice(0,20).map(r=>{
         const st=statusOf(r), done=isOpenFinanceDone(st), isData=r.requestType==='data_transfer_request', d=requestDataFromPayload(r);
-        const infoGrid=isData?`<div class="of-data-grid"><div><small>Salário solicitado</small><strong>${money(d.salary)}</strong></div><div><small>Saldo Deas Finance</small><strong>${done&&d.balance?money(d.balance):'Enviado ao aprovar'}</strong></div><div><small>Dívidas</small><strong>${done?money(d.debt):'Enviadas ao aprovar'}</strong></div><div><small>Limite/Score</small><strong>${done?`${money(d.limit)} · ${d.score||'-'}`:'Enviados ao aprovar'}</strong></div></div>`:`<div class="consent-box"><strong>Pedido de conexão</strong><p class="muted">Apenas cria o vínculo entre Deas Finance e DeasBank. Nenhum valor é movimentado nesta etapa.</p></div>`;
-        return `<div class="of-request-card ${done?'done':''}"><div class="of-request-top"><div><strong>${r.sourceBank||'DeasBank'} pediu ${isData?'renda e dados completos':'conexão'}</strong><p class="muted">${r.userName||'Cliente'} · ${r.emailMasked||'e-mail mascarado'} · senha nunca compartilhada</p></div><span class="status ${ofStatusClass(st)}">${ofStatusLabel(st,r.requestType)}</span></div>${infoGrid}<ul class="mini-list"><li>Finalidade: ${r.purpose||'Open Finance'}</li><li>${isData?'Ao aceitar, o Deas Finance envia salário/renda, saldo, dívidas, limite, empréstimos, score e movimenta o valor solicitado se houver saldo.':'Depois da conexão aceita, cada banco pode solicitar dados financeiros separadamente.'}</li></ul>${!done?`<div class="of-actions-clean"><button class="primary-btn" type="button" onclick="window.approveIncomingOpenFinance('${r.id}','${r.requestType||''}')">Aceitar</button><button class="secondary-btn" type="button" onclick="window.denyIncomingOpenFinance('${r.id}','${r.requestType||''}')">Recusar</button></div>`:`<small class="muted">${r.analysisMessage||'Pedido analisado.'}</small>`}</div>`
+        const infoGrid=isData?`<div class="of-data-grid"><div><small>Salário solicitado</small><strong>${money(d.salary)}</strong></div><div><small>Saldo disponível</small><strong>${done&&d.balance?money(d.balance):'Enviado ao aprovar'}</strong></div><div><small>Dívidas</small><strong>${done?money(d.debt):'Enviadas ao aprovar'}</strong></div><div><small>Limite/Score</small><strong>${done?`${money(d.limit)} · ${d.score||'-'}`:'Enviados ao aprovar'}</strong></div></div>`:`<div class="consent-box"><strong>Pedido de conexão</strong><p class="muted">Apenas cria o vínculo entre Deas Finance e DeasBank. Nenhum valor é movimentado nesta etapa.</p></div>`;
+        return `<div class="of-request-card ${done?'done':''}"><div class="of-request-top"><div><strong>${r.sourceBank||'DeasBank'} pediu ${isData?'renda e dados completos':'conexão'}</strong><p class="muted">${r.userName||'Cliente'} · ${r.emailMasked||'e-mail mascarado'} · senha nunca compartilhada</p></div><span class="status ${ofStatusClass(st)}">${ofStatusLabel(st,r.requestType)}</span></div>${infoGrid}<ul class="mini-list"><li>Finalidade: ${r.purpose||'Open Finance'}</li><li>${isData?'Ao aceitar, o Deas Finance envia salário/renda, saldo disponível, dívidas, limite, empréstimos, score e movimenta o valor solicitado se houver saldo.':'Depois da conexão aceita, cada banco pode solicitar dados financeiros separadamente.'}</li></ul>${!done?`<div class="of-actions-clean"><button class="primary-btn" type="button" onclick="window.approveIncomingOpenFinance('${r.id}','${r.requestType||''}')">Aceitar</button><button class="secondary-btn" type="button" onclick="window.denyIncomingOpenFinance('${r.id}','${r.requestType||''}')">Recusar</button></div>`:`<small class="muted">${r.analysisMessage||'Pedido analisado.'}</small>`}</div>`
       }).join('')+`</div>`;
     }
 
@@ -407,7 +416,7 @@
         const acc=result.account||fresh;
         const externalBalance=Number(acc.balance||0), externalDebt=Number(acc.debt||0), externalLimit=Number(acc.limit||0), loansTotal=Number(acc.loansTotal||0), score=Number(acc.creditScore||500), income=Number(acc.estimatedIncome||0), investmentsTotal=Number(acc.investmentsTotal||acc.investments||0);
         Object.assign(payload,{importedSalary:amount,transferAmount:amount,moneyMoved:amount>0,moneyMoveId:moveId,transferSourceBank:'Deas Finance',transferDestinationBank:'DeasBank',externalBalance,externalDebt,externalLimit,loansTotal,creditScore:score,estimatedIncome:income,investmentsTotal,balanceRange:balanceRange(externalBalance),debtRange:debtRange(externalDebt)});
-        payload.relationshipSummary=`Deas Finance compartilhou salário ${money(amount)}, saldo ${money(externalBalance)}, dívidas ${money(externalDebt)}, cartões/limite ${money(externalLimit)}, empréstimos ${money(loansTotal)}, investimentos ${money(investmentsTotal)}, score ${score} e renda ${money(income)}.`;
+        payload.relationshipSummary=`Deas Finance compartilhou salário ${money(amount)}, saldo disponível ${money(externalBalance)}, dívidas ${money(externalDebt)}, cartões/limite ${money(externalLimit)}, empréstimos ${money(loansTotal)}, investimentos ${money(investmentsTotal)}, score ${score} e renda ${money(income)}.`;
         payload.requestedData={importedSalary:amount,requestedSalaryAmount:amount,externalBalance,externalDebt,externalLimit,loansTotal,creditScore:score,estimatedIncome:income,investmentsTotal,relationshipSummary:payload.relationshipSummary};
         if(amount>0&&result.applied)await addTransaction({creditor:'Portabilidade enviada para DeasBank',value:-amount,status:'pago',type:'Open Finance'});
       }
@@ -588,7 +597,7 @@
         const partnerPayload={consentId:cId,moneyMoveId:moveId,sourceBank:'Deas Finance',partnerBank:p.name,userId:currentUser.uid,userName:profile.name||currentUser.displayName||'Cliente Deas Finance',emailMasked:maskEmail(currentUser.email),purpose:'solicitacao_transferencia_completa_open_finance',requestType:'data_transfer_request',sameOwner:true,permissions:{income:true,balance:true,debts:true,creditLimit:true,loans:true,score:true},requestedData:{importedSalary,requestedSalaryAmount:importedSalary,requestAllFinancialData:true},importedSalary,status:'data_pending',createdAtText:new Date().toISOString(),createdAt:serverTimestamp()};
         const ref=await sendRequestToDeasBank(partnerPayload);const localPayload={...partnerPayload,partnerRequestId:ref.id,connectionStatus:'data_pending',connectionApproved:true};
         await setDoc(localRef,{sharedPayload:localPayload,dataRequestId:ref.id,connectionStatus:'data_pending',connectionApproved:true,moneyMoveId:moveId,requestedSalary:importedSalary,updatedAt:serverTimestamp()},{merge:true});
-        await addTransaction({creditor:'Pedido de renda e dados - DeasBank',value:0,status:'pendente',type:'Open Finance'});toast('Pedido completo enviado. O DeasBank vai liberar salário, saldo, dívidas, limite, empréstimos e score se aprovar.');await refresh()
+        await addTransaction({creditor:'Pedido de renda e dados - DeasBank',value:0,status:'pendente',type:'Open Finance'});toast('Pedido completo enviado. O DeasBank vai liberar salário, saldo disponível, dívidas, limite, empréstimos e score se aprovar.');await refresh()
       })});
 
       $('#syncOpenFinanceBtn')?.addEventListener('click',()=>safeAction(async()=>{
@@ -703,7 +712,9 @@ function ofProScoreImpact(localScore, partnerScore, partnerDebt=0, partnerIncome
 }
 function ofProHistoryHidden(r){ return Array.isArray(r.hiddenForUsers) && currentUser && r.hiddenForUsers.includes(currentUser.uid); }
 function ofProInstallClearButtonFinance(){
-  const tools=document.querySelector('#openFinance .of-list-tools'); if(!tools || document.getElementById('clearOpenFinanceHistoryBtn')) return;
+  const tools=document.querySelector('#openFinance .of-list-tools'); if(!tools) return;
+  const existing=document.getElementById('clearOpenFinanceHistoryBtn');
+  if(existing){ existing.onclick=()=>safeAction(clearOpenFinanceHistoryFinance); return; }
   const btn=document.createElement('button'); btn.id='clearOpenFinanceHistoryBtn'; btn.className='of-filter'; btn.type='button'; btn.textContent='Limpar histórico';
   btn.addEventListener('click',()=>safeAction(clearOpenFinanceHistoryFinance)); tools.appendChild(btn);
 }
@@ -804,6 +815,49 @@ renderConnections = function(list=[]){
   if(score && currentAccount?.creditScore){ const note=document.querySelector('#connectionsList .connection-item small'); if(note) note.textContent += ` · Impacto no score local: ${Number(currentAccount.creditScore||0)} após análise mútua`; }
   const clear=document.getElementById('clearOpenFinanceHistoryBtn'); if(clear) clear.classList.toggle('hidden', false);
 };
+
+
+/* ===================== PATCH FINAL DANIEL - CORES, SCORE MÚTUO E LIMPAR HISTÓRICO ===================== */
+function ofPatchHiddenKeyFinance(){ return 'deasfinance_openfinance_hidden_'+(currentUser?.uid||'anon'); }
+function ofPatchGetHiddenFinance(){ try{return JSON.parse(localStorage.getItem(ofPatchHiddenKeyFinance())||'[]')}catch(_){return[]} }
+function ofPatchSetHiddenFinance(ids){ localStorage.setItem(ofPatchHiddenKeyFinance(), JSON.stringify([...new Set([...(ofPatchGetHiddenFinance()), ...ids.filter(Boolean)])])); }
+function ofPatchInstallClearButtonFinance(){
+  const tools=document.querySelector('#openFinance .of-filter-tabs') || document.querySelector('#openFinance .of-list-tools');
+  if(!tools) return;
+  const existing=document.getElementById('clearOpenFinanceHistoryBtn');
+  if(existing){ existing.onclick=()=>safeAction(clearOpenFinanceHistoryFinance); return; }
+  const btn=document.createElement('button'); btn.id='clearOpenFinanceHistoryBtn'; btn.className='of-filter'; btn.type='button'; btn.textContent='Limpar histórico';
+  btn.addEventListener('click',()=>safeAction(clearOpenFinanceHistoryFinance)); tools.appendChild(btn);
+}
+async function clearOpenFinanceHistoryFinance(){
+  const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  const snap=await getDocs(collection(db,'openFinanceRequests'));
+  const hidden=ofPatchGetHiddenFinance();
+  const finished=['connection_denied','data_denied','consent_revoked','data_approved'];
+  const mine=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>
+    !hidden.includes(r.id) &&
+    (String(r.sourceBank||'').toLowerCase()==='deasbank'||String(r.direction||'').includes('deasfinance')||r.userId===currentUser.uid||r.targetUserId===currentUser.uid) &&
+    finished.includes(String(r.status||''))
+  );
+  const ids=mine.map(r=>r.id); let cloudCount=0;
+  for(const r of mine){
+    try{ await setDoc(doc(db,'openFinanceRequests',r.id),{hiddenForUsers:arrayUnion(currentUser.uid),hiddenAt:serverTimestamp()},{merge:true}); cloudCount++; }
+    catch(e){ console.warn('Histórico ocultado apenas neste navegador por falta de permissão:', e.message); }
+  }
+  ofPatchSetHiddenFinance(ids);
+  toast(ids.length ? `${ids.length} item(ns) removido(s) do histórico. A conexão ativa não foi revogada.` : 'Não havia histórico finalizado para limpar.');
+  await renderIncomingOpenFinanceRequests();
+}
+const ofPatchOldRenderIncomingFinance = renderIncomingOpenFinanceRequests;
+renderIncomingOpenFinanceRequests = async function(){ await ofPatchOldRenderIncomingFinance(); ofPatchInstallClearButtonFinance(); };
+const ofPatchOldRenderConnectionsFinance = renderConnections;
+renderConnections = function(list=[]){
+  ofPatchOldRenderConnectionsFinance(list);
+  ofPatchInstallClearButtonFinance();
+  const label=document.querySelector('#ofExternalBalanceFinance')?.previousElementSibling;
+  if(label) label.textContent='Saldo disponível no DeasBank';
+};
+ofPatchInstallClearButtonFinance();
 
 </script>
 </body>
