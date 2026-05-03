@@ -114,6 +114,42 @@
 #connectionsList:empty{display:none!important}
 #disconnectOpenFinanceBtn:not(.hidden){display:inline-flex!important;align-items:center;justify-content:center}
 
+
+
+/* ===================== OPEN FINANCE V9 - SEM VAZIOS E CONEXÃO REAL ===================== */
+#openFinance{--of-gap:16px;}
+#openFinance .of-pro-hero{margin-bottom:var(--of-gap)!important;}
+#openFinance .of-professional-grid,
+#openFinance .of-professional-grid.of-single,
+#openFinance .of-professional-grid.v9-single{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:var(--of-gap)!important;
+  align-items:stretch!important;
+  margin-bottom:var(--of-gap)!important;
+}
+#openFinance #connectionOverviewCard,
+#openFinance #dataTransferCard,
+#openFinance #ofUnifiedDataCard,
+#openFinance .of-pro-card{
+  width:100%!important;
+  max-width:none!important;
+  min-height:0!important;
+}
+#ofOnboardingCardFinance{display:none!important;}
+#openFinance .of-hidden-v9{display:none!important;}
+#openFinance .connection-item{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:22px;padding:16px;}
+#openFinance .of-connection-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px;}
+#openFinance .of-connection-body .of-metric{min-height:88px;}
+#openFinance .of-state-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+#openFinance .of-no-empty-state{display:grid;gap:10px;border:1px dashed var(--line);border-radius:20px;padding:18px;background:rgba(255,255,255,.035);}
+#openFinance .of-no-empty-state strong{font-size:17px;color:var(--text);}
+#openFinance .of-no-empty-state p{margin:0;color:var(--muted);line-height:1.55;}
+#openFinance .of-pro-data-grid{margin-top:14px;}
+#openFinance .of-hero-actions .hidden{display:none!important;}
+#openFinance .of-request-card{overflow:hidden;}
+@media(max-width:900px){#openFinance .of-connection-body{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -575,6 +611,70 @@
       
       onAuthStateChanged(auth,async user=>{currentUser=user;showApp(Boolean(user));if(user){try{await refresh()}catch(e){toast('Erro ao carregar dados: '+e.message+'. Publique as regras novas do Firestore.')}}});
     });
-  </script>
+  
+
+/* ===================== OPEN FINANCE V9 - LÓGICA PROFISSIONAL ===================== */
+function ofV9StatusPriority(c={}){
+  const p=c.sharedPayload||{}; const st=String(c.connectionStatus||p.connectionStatus||p.status||'connection_pending');
+  const rank={data_approved:90,data_pending:80,connection_approved:70,data_denied:60,connection_pending:50,connection_denied:20,consent_revoked:10};
+  return rank[st]||0;
+}
+function ofV9ActiveConnection(list=[]){
+  const arr=list.filter(c=>String(c.partnerKey||'').toLowerCase()==='deasbank'||String(c.institutionName||'').toLowerCase()==='deasbank');
+  arr.sort((a,b)=> (ofV9StatusPriority(b)-ofV9StatusPriority(a)) || String(b.updatedAt?.seconds||b.createdAtText||b.connectedAt||'').localeCompare(String(a.updatedAt?.seconds||a.createdAtText||a.connectedAt||'')) );
+  return arr[0]||null;
+}
+function ofV9SharedScore(c={}){const p=c.sharedPayload||{};return Number(c.externalScore||c.sharedScore||p.externalScore||p.creditScore||p.sharedScore||0)}
+function ofV9SetTopButtons(status, approved){
+  const connect=document.querySelector('[data-open-modal="openFinanceDialog"]');
+  const sync=document.getElementById('syncOpenFinanceBtn');
+  const disc=document.getElementById('disconnectOpenFinanceBtn');
+  const active = approved || ['connection_pending','data_pending'].includes(status);
+  connect?.classList.toggle('hidden', active);
+  sync?.classList.toggle('hidden', !active);
+  disc?.classList.toggle('hidden', !active);
+}
+renderConnections = function(list=[]){
+  const grid=$('.of-professional-grid'); const title=$('#connectionTitleFinance');
+  const c=ofV9ActiveConnection(list); const transferCard=$('#dataTransferCard'); const unifiedCard=$('#ofUnifiedDataCard'); const onboarding=$('#ofOnboardingCardFinance');
+  const connectionBadge=$('#ofConnectionBadge'); const stepConsent=$('#ofStepConsentFinance'); const stepData=$('#ofStepDataFinance');
+  const setHeader=(text,badge='Sem conexão',cls='')=>{if(title)title.textContent=text;if(connectionBadge){connectionBadge.textContent=badge;connectionBadge.className=`status ${cls}`.trim();}};
+  const hideAll=()=>{transferCard?.classList.add('hidden');unifiedCard?.classList.add('hidden');onboarding?.classList.add('hidden');grid?.classList.add('v9-single');stepConsent?.classList.remove('done');stepData?.classList.remove('done')};
+  if(!c){
+    hideAll(); ofV9SetTopButtons('none',false); setHeader('Nenhuma conexão ativa','Sem conexão','');
+    $('#connectionsList').innerHTML=`<div class="of-no-empty-state"><strong>DeasBank ainda não conectado.</strong><p>Para usar Open Finance, envie uma solicitação pelo botão “Conectar DeasBank”. A tela só libera portabilidade, dados e visão unificada depois do aceite do outro banco.</p></div>`;
+    return;
+  }
+  const payload=c.sharedPayload||{}; const status=String(c.connectionStatus||payload.connectionStatus||payload.status||'connection_pending');
+  const statusMap={connection_pending:['Solicitação enviada','Aguardando aceite',''],connection_approved:['DeasBank conectado','Conexão ativa','ok'],connection_denied:['Conexão recusada','Recusado','bad'],data_pending:['DeasBank conectado','Dados pendentes',''],data_approved:['DeasBank conectado','Dados recebidos','ok'],data_denied:['DeasBank conectado','Dados recusados','bad'],consent_revoked:['Conexão encerrada','Desconectado','bad']};
+  const [head,badge,cls]=statusMap[status]||['Solicitação DeasBank','Pendente',''];
+  const approved=c.connectionApproved===true || ['connection_approved','data_pending','data_approved','data_denied'].includes(status);
+  const canRequest=approved && ['connection_approved','data_approved','data_denied'].includes(status);
+  const hasData=status==='data_approved'; const score=ofV9SharedScore(c);
+  transferCard?.classList.toggle('hidden',!canRequest);
+  unifiedCard?.classList.toggle('hidden',!hasData);
+  onboarding?.classList.add('hidden'); grid?.classList.add('v9-single');
+  stepConsent?.classList.toggle('done',approved); stepData?.classList.toggle('done',hasData);
+  ofV9SetTopButtons(status,approved); setHeader(head,badge,cls);
+  let body='';
+  if(status==='connection_pending'){
+    body=`<div class="of-no-empty-state"><strong>Aguardando aprovação no DeasBank</strong><p>Seu pedido foi enviado. Enquanto não houver aceite, a portabilidade de salário e a visão unificada permanecem ocultas para não criar cartões vazios.</p></div>`;
+  } else if(status==='connection_approved'){
+    body=`<div class="of-connection-body"><div class="of-metric"><span>Status</span><strong>Conexão mútua ativa</strong></div><div class="of-metric"><span>Score compartilhado</span><strong>${score||'-'}</strong></div><div class="of-metric"><span>Próxima etapa</span><strong>Trazer salário e dados</strong></div></div>`;
+  } else if(status==='data_pending'){
+    body=`<div class="of-no-empty-state"><strong>Aguardando consentimento de dados</strong><p>O DeasBank já está conectado. Agora falta aprovar o compartilhamento completo no DeasBank; depois clique em “Sincronizar respostas”.</p></div>`;
+  } else if(status==='data_approved'){
+    body=`<div class="of-connection-body"><div class="of-metric"><span>Status</span><strong>Dados liberados</strong></div><div class="of-metric"><span>Score compartilhado</span><strong>${score||payload.creditScore||'-'}</strong></div><div class="of-metric"><span>Salário trazido</span><strong>${money(payload.importedSalary||c.importedSalary||0)}</strong></div></div>`;
+  } else if(status==='data_denied'){
+    body=`<div class="of-no-empty-state"><strong>Dados recusados</strong><p>A conexão continua ativa, mas o DeasBank recusou o compartilhamento completo. Você pode solicitar novamente quando quiser.</p></div>`;
+  } else if(status==='consent_revoked'){
+    body=`<div class="of-no-empty-state"><strong>Compartilhamento cancelado</strong><p>A conexão foi encerrada nos dois bancos. Para usar novamente, envie uma nova solicitação.</p></div>`;
+  } else {
+    body=`<div class="of-no-empty-state"><strong>${badge}</strong><p>Use a sincronização para atualizar o estado da conexão.</p></div>`;
+  }
+  $('#connectionsList').innerHTML=`<div class="connection-item"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap"><div><strong>DeasBank</strong><p class="muted">Mesma pessoa, bancos diferentes. O vínculo aceito em um lado passa a valer nos dois.</p></div><span class="status ${cls}">${badge}</span></div>${body}<small class="muted">E-mail enviado: ${payload.emailMasked||payload.maskedEmail||'mascarado'} · Senha: nunca compartilhada · Score compartilhado: ${score||'-'}</small></div>`;
+};
+
+</script>
 </body>
 </html>
