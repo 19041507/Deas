@@ -1851,6 +1851,246 @@ renderConnections = function(list = []) {
   }
 };
 
+
+
+/* ===================== V21 - SCORE DEAS FINANCE SEM TRAVAR EM 1000 ===================== */
+function v21ClampFinanceScore(value) {
+  return Math.max(250, Math.min(950, Math.round(Number(value || 0))));
+}
+
+function v21Number(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function v21PartnerSnapshotFromConnections() {
+  const active = typeof ofV9ActiveConnection === "function" ? ofV9ActiveConnection(currentConnections || []) : null;
+  const p = active?.sharedPayload || {};
+  const d = p.requestedData || active?.requestedData || {};
+  return {
+    externalBalance: v21Number(active?.externalBalance ?? p.externalBalance ?? d.externalBalance, 0),
+    externalDebt: v21Number(active?.externalDebt ?? p.externalDebt ?? d.externalDebt, 0),
+    externalLimit: v21Number(active?.externalLimit ?? p.externalLimit ?? d.externalLimit, 0),
+    loansTotal: v21Number(active?.externalLoans ?? active?.loansTotal ?? p.loansTotal ?? d.loansTotal, 0),
+    investmentsTotal: v21Number(active?.externalInvestments ?? p.investmentsTotal ?? d.investmentsTotal, 0),
+    estimatedIncome: v21Number(active?.externalIncome ?? p.estimatedIncome ?? d.estimatedIncome ?? active?.importedSalary ?? p.importedSalary ?? p.transferAmount, 0),
+    creditScore: v21Number(active?.externalScore ?? active?.mutualScore ?? p.externalScore ?? p.creditScore ?? p.sharedScore ?? p.mutualScore ?? d.creditScore, 0)
+  };
+}
+
+function v21PartnerSnapshot(data = {}) {
+  const d = data.requestedData || {};
+  const latest = data.latestPartnerSnapshot || data.latestSourceSnapshot || {};
+  return {
+    externalBalance: v21Number(data.externalBalance ?? d.externalBalance ?? latest.externalBalance, 0),
+    externalDebt: v21Number(data.externalDebt ?? d.externalDebt ?? latest.externalDebt, 0),
+    externalLimit: v21Number(data.externalLimit ?? data.externalLoans ?? d.externalLimit ?? latest.externalLimit, 0),
+    loansTotal: v21Number(data.loansTotal ?? data.externalLoans ?? d.loansTotal ?? latest.loansTotal, 0),
+    investmentsTotal: v21Number(data.investmentsTotal ?? d.investmentsTotal ?? latest.investmentsTotal, 0),
+    estimatedIncome: v21Number(data.estimatedIncome ?? data.externalIncome ?? d.estimatedIncome ?? data.importedSalary ?? data.transferAmount ?? d.importedSalary ?? latest.estimatedIncome, 0),
+    creditScore: v21Number(data.creditScore ?? data.externalScore ?? data.sharedScore ?? data.mutualScore ?? d.creditScore ?? latest.creditScore, 0)
+  };
+}
+
+function v21OwnScoreComponent(account = {}) {
+  const balance = v21Number(account.balance, 0);
+  const debt = v21Number(account.debt, 0);
+  const income = v21Number(account.estimatedIncome, 3500) || 3500;
+  const loans = v21Number(account.loansTotal, 0);
+  const limit = v21Number(account.limit, 0);
+  const debtRatio = debt / Math.max(1000, income);
+  let score = 650;
+
+  if (income >= 10000) score += 80;
+  else if (income >= 7000) score += 60;
+  else if (income >= 4500) score += 38;
+  else if (income >= 2500) score += 18;
+  else score -= 45;
+
+  if (debtRatio >= 2) score -= 190;
+  else if (debtRatio >= 1.2) score -= 135;
+  else if (debtRatio >= 0.7) score -= 80;
+  else if (debtRatio >= 0.3) score -= 38;
+  else if (debt > 0) score -= 16;
+  else score += 35;
+
+  if (loans > 0) score -= Math.min(105, Math.round(loans / 90));
+
+  if (balance >= income * 1.2) score += 58;
+  else if (balance >= income * 0.7) score += 36;
+  else if (balance >= income * 0.3) score += 18;
+  else if (balance < 100) score -= 32;
+  if (balance < 0) score -= 90;
+
+  if (limit >= income * 2 && debtRatio < 0.4) score += 18;
+  else if (limit < 500) score -= 15;
+
+  return v21ClampFinanceScore(score);
+}
+
+function v21FinalFinanceScore(account = {}, partnerInput = null) {
+  const own = v21OwnScoreComponent(account);
+  const partner = partnerInput || account.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections();
+  let score = own;
+
+  const partnerScore = v21Number(partner.creditScore, 0);
+  const partnerDebt = v21Number(partner.externalDebt, 0);
+  const partnerIncome = v21Number(partner.estimatedIncome, 0);
+  const partnerBalance = v21Number(partner.externalBalance, 0);
+  const partnerLoans = v21Number(partner.loansTotal, 0);
+
+  if (partnerScore > 0) {
+    score = Math.round((own * 0.68) + (Math.min(950, partnerScore) * 0.32));
+  }
+
+  if (partnerIncome > 0 || partnerDebt > 0 || partnerBalance !== 0) {
+    const partnerDebtRatio = partnerDebt / Math.max(1000, partnerIncome || 3000);
+    if (partnerDebtRatio >= 2) score -= 70;
+    else if (partnerDebtRatio >= 1.2) score -= 48;
+    else if (partnerDebtRatio >= 0.7) score -= 26;
+    else if (partnerDebt > 0) score -= 9;
+    else score += 12;
+
+    if (partnerIncome >= 8000) score += 20;
+    else if (partnerIncome >= 4500) score += 12;
+    else if (partnerIncome > 0 && partnerIncome < 1800) score -= 10;
+
+    if (partnerBalance >= Math.max(1200, partnerIncome * 0.5)) score += 12;
+    else if (partnerBalance < 0) score -= 18;
+
+    if (partnerLoans > 0) score -= Math.min(40, Math.round(partnerLoans / 180));
+  }
+
+  return v21ClampFinanceScore(score);
+}
+
+v20FinanceSnapshot = function(account = currentAccount || {}) {
+  const partner = account.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections();
+  const score = v21FinalFinanceScore(account, partner);
+  return {
+    externalBalance: v21Number(account.balance, 0),
+    externalDebt: v21Number(account.debt, 0),
+    externalLimit: v21Number(account.limit, 0),
+    loansTotal: v21Number(account.loansTotal, 0),
+    investmentsTotal: v21Number(account.investmentsTotal || account.investments, 0),
+    estimatedIncome: v21Number(account.estimatedIncome, 3500),
+    creditScore: score,
+    externalScore: score,
+    sharedScore: score,
+    updatedAtText: new Date().toISOString()
+  };
+};
+
+v20PartnerSnapshotFinance = function(data = {}) {
+  return v21PartnerSnapshot(data);
+};
+
+v20UnifiedFinanceScore = function(local = {}, partner = {}) {
+  const accountLike = {
+    balance: local.externalBalance,
+    debt: local.externalDebt,
+    limit: local.externalLimit,
+    loansTotal: local.loansTotal,
+    investmentsTotal: local.investmentsTotal,
+    estimatedIncome: local.estimatedIncome
+  };
+  return v21FinalFinanceScore(accountLike, partner);
+};
+
+v20FinanceDynamicScore = function(account = {}) {
+  return v21FinalFinanceScore(account, account.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections());
+};
+
+analyzeCredit = function(account = currentAccount, connections = currentConnections) {
+  const partner = account?.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections();
+  const score = v21FinalFinanceScore(account || {}, partner);
+  const income = v21Number(account?.estimatedIncome, 3500);
+  const debt = v21Number(account?.debt, 0);
+  const balance = v21Number(account?.balance, 0);
+  const debtRatio = debt / Math.max(1, income * 3);
+  const approved = score >= 620 && debtRatio < 0.65;
+  const max = Math.max(0, Math.round(((income * 2.1) + (balance * 0.22) - (debt * 0.58) + Math.max(0, score - 550) * 8) / 50) * 50);
+  const limit = approved ? Math.min(max, 25000) : Math.min(max, 1500);
+  const reason = approved
+    ? "Aprovado: score recalculado por saldo, renda, dívidas e Open Finance."
+    : "Em análise: reduza dívidas, melhore saldo/renda ou sincronize o banco parceiro.";
+  return { approved, limit, score, income, reason };
+};
+
+async function v21PersistOnlyScoreFinance(reason = "score_deasfinance_recalculado") {
+  if (!currentUser || !db || !currentAccount) return currentAccount;
+  const partner = currentAccount.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections();
+  const score = v21FinalFinanceScore(currentAccount, partner);
+  if (Number(currentAccount.creditScore || 0) !== score) {
+    await updateDoc(doc(db, "accounts", currentUser.uid), {
+      creditScore: score,
+      lastScoreUpdatedAt: new Date().toISOString(),
+      lastScoreReason: reason
+    });
+    currentAccount = { ...currentAccount, creditScore: score, lastScoreReason: reason };
+  }
+  renderAccount(currentAccount);
+  return currentAccount;
+}
+
+updateAccount = async function(next) {
+  const merged = { ...currentAccount, ...next };
+  const score = v21FinalFinanceScore(merged, merged.openFinancePartnerSnapshot || v21PartnerSnapshotFromConnections());
+  const payload = {
+    ...next,
+    creditScore: score,
+    lastScoreUpdatedAt: new Date().toISOString(),
+    lastScoreReason: "acao_interna_deasfinance"
+  };
+  await updateDoc(doc(db, "accounts", currentUser.uid), payload);
+  currentAccount = { ...merged, ...payload };
+  await v20BroadcastFinanceSnapshot("acao_interna_deasfinance");
+  closeDialogs();
+  await refresh();
+  return currentAccount;
+};
+
+v20PersistFinanceMutualScore = async function(mutualScore, extras = {}) {
+  const ref = doc(db, "accounts", currentUser.uid);
+  const snap = await getDoc(ref);
+  const base = snap.exists() ? snap.data() : (currentAccount || {});
+  const partnerSnapshot = v21PartnerSnapshot(extras);
+  const input = {
+    ...base,
+    openFinancePartnerSnapshot: partnerSnapshot
+  };
+  const score = v21FinalFinanceScore(input, partnerSnapshot);
+  const payload = {
+    ...extras,
+    openFinancePartnerSnapshot: partnerSnapshot,
+    openFinanceMutualScore: mutualScore || score,
+    creditScore: score,
+    lastOpenFinanceScoreImpact: score - v21Number(base.creditScore, 500),
+    lastScoreUpdatedAt: new Date().toISOString(),
+    lastScoreReason: "sync_openfinance_deasfinance"
+  };
+  await updateDoc(ref, payload);
+  currentAccount = { ...base, ...payload };
+  await v20BroadcastFinanceSnapshot("sync_openfinance_deasfinance");
+  return currentAccount;
+};
+
+const v21OriginalRefreshFinance = refresh;
+refresh = async function() {
+  await v21OriginalRefreshFinance();
+  if (currentUser && currentAccount) {
+    await v21PersistOnlyScoreFinance("refresh_deasfinance");
+  }
+};
+
+(function v21NormalizeScoreOnLoad() {
+  setTimeout(() => {
+    if (currentUser && currentAccount) {
+      safeAction(() => v21PersistOnlyScoreFinance("normalizacao_score_deasfinance"));
+    }
+  }, 900);
+})();
+
 </script>
 </body>
 </html>
