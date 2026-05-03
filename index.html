@@ -675,6 +675,127 @@ renderConnections = function(list=[]){
   $('#connectionsList').innerHTML=`<div class="connection-item"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap"><div><strong>DeasBank</strong><p class="muted">Mesma pessoa, bancos diferentes. O vínculo aceito em um lado passa a valer nos dois.</p></div><span class="status ${cls}">${badge}</span></div>${body}<small class="muted">E-mail enviado: ${payload.emailMasked||payload.maskedEmail||'mascarado'} · Senha: nunca compartilhada · Score compartilhado: ${score||'-'}</small></div>`;
 };
 
+
+/* ===================== OPEN FINANCE PRO FINAL - Daniel Augusto =====================
+   Camada final para deixar o fluxo profissional e previsível:
+   - conexão aceita em qualquer banco vira vínculo mútuo;
+   - score compartilhado pode aumentar OU reduzir o score local;
+   - portabilidade usa saldo disponível e trava por moneyMoveId;
+   - histórico pode ser limpo sem cancelar a conexão ativa.
+============================================================================ */
+function ofProClampScore(v){ return Math.max(0, Math.min(1000, Math.round(Number(v||0)))); }
+function ofProScoreImpact(localScore, partnerScore, partnerDebt=0, partnerIncome=0){
+  localScore=Number(localScore||500); partnerScore=Number(partnerScore||0); partnerDebt=Number(partnerDebt||0); partnerIncome=Number(partnerIncome||0);
+  if(!partnerScore) return ofProClampScore(localScore);
+  const scoreDelta=Math.round((partnerScore-localScore)*0.35);
+  const debtPenalty=partnerDebt>5000 ? -35 : partnerDebt>2000 ? -18 : partnerDebt>0 ? -6 : 12;
+  const incomeBonus=partnerIncome>=5000 ? 18 : partnerIncome>=3000 ? 10 : 0;
+  return ofProClampScore(localScore + scoreDelta + debtPenalty + incomeBonus);
+}
+function ofProHistoryHidden(r){ return Array.isArray(r.hiddenForUsers) && currentUser && r.hiddenForUsers.includes(currentUser.uid); }
+function ofProInstallClearButtonFinance(){
+  const tools=document.querySelector('#openFinance .of-list-tools'); if(!tools || document.getElementById('clearOpenFinanceHistoryBtn')) return;
+  const btn=document.createElement('button'); btn.id='clearOpenFinanceHistoryBtn'; btn.className='of-filter'; btn.type='button'; btn.textContent='Limpar histórico';
+  btn.addEventListener('click',()=>safeAction(clearOpenFinanceHistoryFinance)); tools.appendChild(btn);
+}
+async function clearOpenFinanceHistoryFinance(){
+  const { deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  const snap=await getDocs(collection(db,'openFinanceRequests'));
+  const mine=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>
+    (String(r.sourceBank||'').toLowerCase()==='deasbank'||String(r.direction||'').includes('deasfinance')||r.userId===currentUser.uid) &&
+    ['connection_denied','data_denied','consent_revoked','data_approved'].includes(String(r.status||''))
+  );
+  let count=0;
+  for(const r of mine){
+    try{ await deleteDoc(doc(db,'openFinanceRequests',r.id)); count++; }
+    catch(e){
+      try{ await setDoc(doc(db,'openFinanceRequests',r.id),{hiddenForUsers:[currentUser.uid],hiddenAt:serverTimestamp()},{merge:true}); count++; }catch(_){ }
+    }
+  }
+  toast(count ? `${count} item(ns) removido(s) do histórico Open Finance.` : 'Não havia histórico finalizado para limpar.');
+  await refresh();
+}
+const ofProOldRenderIncomingFinance = renderIncomingOpenFinanceRequests;
+renderIncomingOpenFinanceRequests = async function(){
+  await ofProOldRenderIncomingFinance();
+  ofProInstallClearButtonFinance();
+};
+async function ofProMirrorFinanceConnection(request,status,extra={}){
+  const approved=['connection_approved','data_pending','data_approved','data_denied'].includes(status);
+  const score=Number(extra.creditScore||extra.sharedScore||currentAccount?.creditScore||500);
+  const base={
+    institutionName:'DeasBank', partnerKey:'deasbank', connectionMode:'firebase_mutual_openfinance_pro',
+    connectionStatus:status, connectionApproved:approved, sameOwner:true, ownerFingerprint:maskEmail(currentUser.email),
+    partnerRequestId:request.id||request.partnerRequestId||request.requestId||null, sharedScore:score,
+    ...extra,
+    sharedPayload:{...request,...extra,status,connectionStatus:status,sameOwner:true,sharedScore:score,ownerFingerprint:maskEmail(currentUser.email)},
+    updatedAt:serverTimestamp()
+  };
+  await setDoc(doc(db,'users',currentUser.uid,'openFinanceConnections','deasbank'),base,{merge:true});
+  if(deasBankDb && request.userId){
+    await setDoc(doc(deasBankDb,'users',request.userId,'openFinanceConnections','deasfinance'),{
+      institutionName:'Deas Finance', partnerKey:'deasfinance', connectionMode:'firebase_mutual_openfinance_pro',
+      connectionStatus:status, connectionApproved:approved, sameOwner:true, ownerFingerprint:maskEmail(currentUser.email),
+      partnerRequestId:request.id||request.partnerRequestId||request.requestId||null, sharedScore:score,
+      sharedPayload:{...request,...extra,status,connectionStatus:status,sameOwner:true,sharedScore:score,ownerFingerprint:maskEmail(currentUser.email)},
+      updatedAt:serverTimestamp()
+    },{merge:true});
+  }
+}
+async function ofProSyncFinance(){
+  const localRef=doc(db,'users',currentUser.uid,'openFinanceConnections','deasbank');
+  const localSnap=await getDoc(localRef); if(!localSnap.exists()) throw new Error('Nenhuma solicitação DeasBank encontrada.');
+  const local=localSnap.data(); const requestId=local.dataRequestId||local.partnerRequestId||local.sharedPayload?.partnerRequestId; if(!requestId) throw new Error('Não encontrei o ID da solicitação enviada ao DeasBank.');
+  const partnerSnap=await getDoc(doc(deasBankDb,'openFinanceRequests',requestId)); if(!partnerSnap.exists()) throw new Error('A solicitação ainda não apareceu no DeasBank.');
+  const partner={id:requestId,...partnerSnap.data()}; const status=partner.status||'connection_pending';
+  const sharedPayload={...(local.sharedPayload||{}),...partner,partnerRequestId:requestId,connectionStatus:status};
+  if(status==='connection_approved'){
+    const partnerScore=Number(partner.creditScore||partner.sharedScore||partner.externalScore||0);
+    const newScore=ofProScoreImpact(currentAccount.creditScore,partnerScore,0,0);
+    if(partnerScore) await updateDoc(doc(db,'accounts',currentUser.uid),{creditScore:newScore,externalScore:partnerScore,lastOpenFinanceScoreImpact:newScore-Number(currentAccount.creditScore||500)});
+    await ofProMirrorFinanceConnection(partner,'connection_approved',{externalScore:partnerScore,creditScore:partnerScore,relationshipSummary:`Conexão mútua ativa. Score compartilhado pelo DeasBank: ${partnerScore||'-'}.`});
+    toast('Conexão aceita. O vínculo agora vale para os dois bancos e o score foi recalculado.');
+  } else if(status==='data_approved'){
+    const importedSalary=Number(partner.transferAmount||partner.importedSalary||partner.requestedData?.importedSalary||0);
+    const moveId=partner.moneyMoveId||local.moneyMoveId||`move_${requestId}`;
+    const externalBalance=Number(partner.externalBalance||partner.requestedData?.externalBalance||0);
+    const externalDebt=Number(partner.externalDebt||partner.requestedData?.externalDebt||0);
+    const externalLimit=Number(partner.externalLimit||partner.requestedData?.externalLimit||0);
+    const loansTotal=Number(partner.loansTotal||partner.requestedData?.loansTotal||0);
+    const externalScore=Number(partner.creditScore||partner.externalScore||partner.requestedData?.creditScore||0);
+    const investmentsTotal=Number(partner.investmentsTotal||partner.requestedData?.investmentsTotal||0);
+    const externalIncome=Number(partner.estimatedIncome||partner.requestedData?.estimatedIncome||importedSalary||0);
+    if(partner.moneyMoved && importedSalary>0){ const r=await applyAccountBalanceDeltaOnce(importedSalary,moveId+'_destino_deasfinance','Portabilidade recebida do DeasBank'); if(r.applied) await addTransaction({creditor:'Portabilidade recebida do DeasBank',value:importedSalary,status:'pago',type:'Open Finance'}); }
+    const freshSnap=await getDoc(doc(db,'accounts',currentUser.uid)); const fresh=freshSnap.exists()?freshSnap.data():currentAccount;
+    const newScore=ofProScoreImpact(fresh.creditScore,externalScore,externalDebt,externalIncome);
+    const update={estimatedIncome:Math.max(Number(fresh.estimatedIncome||0),externalIncome,importedSalary),externalDebt,externalBalance,externalLimit,externalLoans:loansTotal,externalInvestments:investmentsTotal,externalScore,creditScore:newScore,lastOpenFinanceScoreImpact:newScore-Number(fresh.creditScore||500)};
+    await updateDoc(doc(db,'accounts',currentUser.uid),update);
+    await ofProMirrorFinanceConnection(partner,'data_approved',{...update,importedSalary,externalIncome,relationshipSummary:partner.relationshipSummary||'Dados financeiros recebidos com consentimento.'});
+    toast(`Dados sincronizados. Score ajustado para ${newScore} e saldo disponível atualizado sem duplicar dinheiro.`);
+  } else if(status==='connection_denied' || status==='data_denied' || status==='consent_revoked'){
+    await setDoc(localRef,{connectionStatus:status,connectionApproved:false,sharedPayload,updatedAt:serverTimestamp()},{merge:true});
+    toast(ofStatusLabel(status));
+  } else {
+    await setDoc(localRef,{connectionStatus:status,sharedPayload,updatedAt:serverTimestamp()},{merge:true});
+    toast('Ainda está pendente no DeasBank.');
+  }
+  await refresh();
+}
+function ofProReplaceFinanceHandlers(){
+  const sync=document.getElementById('syncOpenFinanceBtn');
+  if(sync && !sync.dataset.proFinal){ const clone=sync.cloneNode(true); clone.dataset.proFinal='1'; clone.addEventListener('click',()=>safeAction(ofProSyncFinance)); sync.replaceWith(clone); }
+  ofProInstallClearButtonFinance();
+}
+ofProReplaceFinanceHandlers();
+const ofProOldRenderConnectionsFinance = renderConnections;
+renderConnections = function(list=[]){
+  ofProOldRenderConnectionsFinance(list);
+  const c=ofV9ActiveConnection(list); if(!c) return;
+  const score=ofV9SharedScore(c); const status=String(c.connectionStatus||c.sharedPayload?.connectionStatus||c.sharedPayload?.status||'');
+  if(score && currentAccount?.creditScore){ const note=document.querySelector('#connectionsList .connection-item small'); if(note) note.textContent += ` · Impacto no score local: ${Number(currentAccount.creditScore||0)} após análise mútua`; }
+  const clear=document.getElementById('clearOpenFinanceHistoryBtn'); if(clear) clear.classList.toggle('hidden', false);
+};
+
 </script>
 </body>
 </html>
