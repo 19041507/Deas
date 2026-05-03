@@ -101,6 +101,11 @@
 .of-clean-steps strong{color:#fff}.of-clean-steps span{color:var(--muted);line-height:1.45;font-size:13px}
 .of-compact-info{border:1px dashed var(--line);border-radius:18px;padding:16px;color:var(--muted);background:rgba(255,255,255,.035);margin-top:12px}
 #ofUnifiedDataCard.hidden,#dataTransferCard.hidden,#disconnectOpenFinanceBtn.hidden,#ofOnboardingCardFinance.hidden{display:none!important}
+.of-professional-grid.of-single{grid-template-columns:1fr!important}
+.of-professional-grid.of-single #connectionOverviewCard{width:100%}
+#connectionOverviewCard{transition:.18s ease}
+.of-app-state{border:1px dashed var(--line);border-radius:18px;padding:16px;background:rgba(255,255,255,.035);color:var(--muted);line-height:1.55}
+.of-state-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 @media(max-width:980px){.of-clean-steps{grid-template-columns:1fr}}
 </style>
 </head>
@@ -174,7 +179,7 @@
             <div class="section-head-row">
               <div>
                 <p class="eyebrow">Conexão atual</p>
-                <h3>DeasBank conectado</h3>
+                <h3 id="connectionTitleFinance">Nenhuma conexão ativa</h3>
               </div>
               <span class="status" id="ofConnectionBadge">Sem conexão</span>
             </div>
@@ -194,7 +199,7 @@
           </article>
         </div>
 
-        <article class="card of-pro-card table-card" id="ofOnboardingCardFinance">
+        <article class="card of-pro-card table-card hidden" id="ofOnboardingCardFinance">
           <div class="section-head-row">
             <div>
               <p class="eyebrow">Como funciona</p>
@@ -345,9 +350,13 @@
     function renderAccount(a={}){const credit=analyzeCredit(a,currentConnections);$('#balanceValue').textContent=money(a.balance);$('#debtValue').textContent=money(a.debt);$('#limitValue').textContent=money(a.limit);$('#preApprovedValue').textContent=money(credit.limit);$('#loansTotal').textContent=money(a.loansTotal);$('#creditScore').textContent=credit.score;$('#scoreRing').style.setProperty('--score',`${Math.min(100,credit.score/10)}%`);$('#creditReason').textContent=credit.reason;$('#loanDecision').innerHTML=`<p class="approval ${credit.approved?'ok':'bad'}">${credit.approved?'Aprovado':'Em análise'}</p><p class="muted">Limite sugerido: <strong>${money(credit.limit)}</strong><br>Renda estimada: ${money(credit.income)} · Score ajustado: ${credit.score}</p>`}
     function renderTransactions(list=[]){$('#transactionsBody').innerHTML=list.map(tx=>`<tr><td><strong>${tx.creditor||'Movimentação'}</strong><br><small class="muted">${tx.type||'registro'}</small></td><td>${tx.date||'-'}</td><td style="color:${Number(tx.value)<0?'var(--red)':'var(--green)'}">${money(tx.value)}</td><td><span class="status ${tx.status==='pago'?'ok':''}">${tx.status||'pago'}</span></td></tr>`).join('')||'<tr><td colspan="4"><div class="empty">Nenhuma movimentação encontrada.</div></td></tr>'}
     function hasApprovedOpenFinance(status, c={}){
-      return c.connectionApproved===true || ['connection_approved','data_pending','data_approved','data_denied'].includes(String(status||''));
+      const st=String(status||'');
+      if(['consent_revoked','connection_denied','connection_pending'].includes(st))return false;
+      return c.connectionApproved===true || ['connection_approved','data_pending','data_approved','data_denied'].includes(st);
     }
     function renderConnections(list=[]){
+      const grid=$('.of-professional-grid');
+      const title=$('#connectionTitleFinance');
       const deasBankConnections=list.filter(c=>String(c.partnerKey||'').toLowerCase()==='deasbank'||String(c.institutionName||'').toLowerCase()==='deasbank');
       const c=deasBankConnections.sort((a,b)=>String(b.createdAtText||b.connectedAt||'').localeCompare(String(a.createdAtText||a.connectedAt||'')))[0];
       const transferCard=$('#dataTransferCard');
@@ -357,45 +366,57 @@
       const connectionBadge=$('#ofConnectionBadge');
       const stepConsent=$('#ofStepConsentFinance');
       const stepData=$('#ofStepDataFinance');
-      const resetPanels=()=>{
+      const hideProfessionalBlocks=()=>{
         transferCard?.classList.add('hidden');
         unifiedCard?.classList.add('hidden');
-        disconnectBtn?.classList.add('hidden');
-        onboarding?.classList.remove('hidden');
-        if(connectionBadge){connectionBadge.textContent='Sem conexão';connectionBadge.className='status';}
-        stepConsent?.classList.remove('done');stepData?.classList.remove('done');
+        onboarding?.classList.add('hidden');
+        grid?.classList.add('of-single');
+        stepConsent?.classList.remove('done');
+        stepData?.classList.remove('done');
       };
-      if(!c){resetPanels();$('#connectionsList').innerHTML='<div class="empty of-soft">Nenhuma conexão DeasBank solicitada ainda. Clique em “Conectar DeasBank” para começar.</div>';return}
+      const setHeader=(text,badge='Sem conexão',cls='')=>{
+        if(title)title.textContent=text;
+        if(connectionBadge){connectionBadge.textContent=badge;connectionBadge.className=`status ${cls}`.trim();}
+      };
+      if(!c){
+        hideProfessionalBlocks();
+        disconnectBtn?.classList.add('hidden');
+        setHeader('Nenhuma conexão ativa','Sem conexão','');
+        $('#connectionsList').innerHTML=`<div class="of-app-state"><strong>Conecte uma instituição para começar.</strong><p class="muted" style="margin:8px 0 0">Como em uma aplicação real, a visão unificada, dados financeiros e portabilidade de salário só aparecem depois do consentimento. Clique em “Conectar DeasBank” no topo para solicitar a conexão.</p><div class="of-state-actions"><button class="primary-btn" type="button" onclick="document.getElementById('openFinanceDialog').showModal()">Conectar DeasBank</button></div></div>`;
+        return;
+      }
       const payload=c.sharedPayload||{};
       const status=String(c.connectionStatus||payload.connectionStatus||payload.status||'connection_pending');
       const statusMap={connection_pending:['Conexão pendente',''],connection_approved:['Conta conectada','ok'],connection_denied:['Conexão negada','bad'],data_pending:['Dados pendentes',''],data_approved:['Dados recebidos','ok'],data_denied:['Dados recusados','bad'],consent_revoked:['Desconectado','bad']};
       const [statusLabel,statusClass]=statusMap[status]||['Pendente',''];
       const approved=hasApprovedOpenFinance(status,c);
-      const canRequestData=approved&&!['connection_pending','connection_denied','data_pending','consent_revoked'].includes(status);
+      const canRequestData=approved && ['connection_approved','data_approved','data_denied'].includes(status);
+      const hasUnifiedData=status==='data_approved';
       transferCard?.classList.toggle('hidden',!canRequestData);
-      unifiedCard?.classList.toggle('hidden',!approved);
-      onboarding?.classList.toggle('hidden',approved);
+      unifiedCard?.classList.toggle('hidden',!hasUnifiedData);
+      onboarding?.classList.add('hidden');
+      grid?.classList.toggle('of-single',!canRequestData);
       disconnectBtn?.classList.toggle('hidden',!approved && status!=='connection_pending');
-      if(connectionBadge){connectionBadge.textContent=statusLabel;connectionBadge.className=`status ${statusClass}`;}
+      setHeader(status==='consent_revoked'?'Conexão encerrada':(approved?'DeasBank conectado':'Solicitação DeasBank'),statusLabel,statusClass);
       stepConsent?.classList.toggle('done',approved);
-      stepData?.classList.toggle('done',status==='data_approved');
+      stepData?.classList.toggle('done',hasUnifiedData);
       let body='';
       if(status==='connection_pending'){
-        body=`<div class="consent-box"><strong>Aguardando aceite no DeasBank</strong><p class="muted">A conexão foi solicitada. Quando o DeasBank aceitar, a área de portabilidade e visão unificada será liberada.</p></div>`;
+        body=`<div class="consent-box"><strong>Aguardando aprovação no DeasBank</strong><p class="muted">A solicitação foi enviada. Nenhum dado financeiro é exibido enquanto o DeasBank não aceitar a conexão.</p></div>`;
       } else if(status==='connection_approved'){
-        body=`<div class="consent-box"><strong>Conta conectada</strong><p class="muted">Agora você pode usar “Trazer salário e dados do DeasBank”. Nenhum dado financeiro é exibido antes desse segundo consentimento.</p></div><div class="of-compact-info">Gestão ativa: você pode desconectar a qualquer momento pelo botão no topo.</div>`;
+        body=`<div class="consent-box"><strong>Conexão ativa</strong><p class="muted">Agora a portabilidade de salário está liberada. Para visualizar dados unificados, solicite “Trazer salário e dados” e aguarde o consentimento do DeasBank.</p></div>`;
       } else if(status==='connection_denied'){
-        body=`<div class="consent-box"><strong>Conexão negada</strong><p class="muted">O DeasBank recusou a conexão. Você pode enviar uma nova solicitação quando quiser.</p></div>`;
+        body=`<div class="consent-box"><strong>Conexão recusada</strong><p class="muted">O DeasBank recusou esta solicitação. Você pode iniciar uma nova conexão pelo botão no topo.</p></div>`;
       } else if(status==='data_pending'){
-        body=`<div class="consent-box"><strong>Aguardando liberação de dados</strong><p class="muted">O pedido foi enviado. Abra o DeasBank, aceite a portabilidade e depois clique em “Sincronizar respostas”.</p></div>`;
+        body=`<div class="consent-box"><strong>Aguardando liberação dos dados</strong><p class="muted">O pedido de salário, saldo, dívidas, cartões, empréstimos e investimentos foi enviado. Depois de aprovar no DeasBank, clique em “Sincronizar respostas”.</p></div>`;
       } else if(status==='data_denied'){
-        body=`<div class="consent-box"><strong>Dados recusados</strong><p class="muted">A conexão continua ativa, mas o DeasBank recusou o compartilhamento de dados desta solicitação.</p></div>`;
+        body=`<div class="consent-box"><strong>Dados recusados</strong><p class="muted">A conexão continua ativa, mas o DeasBank recusou esta liberação de dados. Você pode solicitar novamente.</p></div>`;
       } else if(status==='consent_revoked'){
-        body=`<div class="consent-box"><strong>Compartilhamento cancelado</strong><p class="muted">A conexão foi encerrada. Para usar novamente, envie uma nova solicitação.</p></div>`;
+        body=`<div class="consent-box"><strong>Compartilhamento cancelado</strong><p class="muted">A conexão foi encerrada. A visão unificada e a portabilidade ficam ocultas até uma nova conexão ser aprovada.</p></div><div class="of-state-actions"><button class="primary-btn" type="button" onclick="document.getElementById('openFinanceDialog').showModal()">Conectar novamente</button></div>`;
       } else {
         body=`<div class="of-connected-summary"><div class="of-metric"><span>Salário/renda liberada</span><strong>${money(payload.importedSalary||c.importedSalary||0)}</strong></div><div class="of-metric"><span>Saldo DeasBank</span><strong>${money(payload.externalBalance||c.externalBalance||0)}</strong></div><div class="of-metric"><span>Dívidas DeasBank</span><strong>${money(payload.externalDebt||c.externalDebt||0)}</strong></div><div class="of-metric"><span>Limite DeasBank</span><strong>${money(payload.externalLimit||c.externalLimit||0)}</strong></div></div>`;
       }
-      $('#connectionsList').innerHTML=`<div class="connection-item"><div style="width:100%"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap"><div><strong>DeasBank</strong><p class="muted">Open Finance com consentimento separado para conexão, dados e portabilidade.</p></div><span class="status ${statusClass}">${statusLabel}</span></div>${body}<small class="muted">E-mail enviado: ${payload.emailMasked||payload.maskedEmail||'mascarado'} · Senha: nunca compartilhada · Criado em ${c.connectedAt||today()}</small></div></div>`;
+      $('#connectionsList').innerHTML=`<div class="connection-item"><div style="width:100%"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap"><div><strong>DeasBank</strong><p class="muted">Consentimento separado para conexão, dados financeiros e portabilidade de salário.</p></div><span class="status ${statusClass}">${statusLabel}</span></div>${body}<small class="muted">E-mail enviado: ${payload.emailMasked||payload.maskedEmail||'mascarado'} · Senha: nunca compartilhada · Criado em ${c.connectedAt||today()}</small></div></div>`;
     }
 
     async function ensureAccount(uid){const ref=doc(db,'accounts',uid);const snap=await getDoc(ref);if(snap.exists())return snap.data();const initial=seedAccount(uid,currentUser?.email||'');await setDoc(ref,initial);return initial}
