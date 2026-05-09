@@ -1,119 +1,100 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useApp } from "@/components/AppShell";
-const money = (v:number) => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-const scoreColor = (s:number) => s>=800?"#34D399":s>=700?"#60A5FA":s>=600?"#F2B84B":s>=500?"#FBBF24":"#F87171";
-const scoreCat = (s:number) => s>=800?"Excelente":s>=700?"Bom":s>=600?"Regular":s>=500?"Médio":"Baixo";
-const scoreDesc = (s:number) => s>=800?"Score excelente. Melhores taxas e maior limite disponível.":s>=700?"Score bom. Acesso a produtos de crédito com boas condições.":s>=600?"Score regular. Crédito disponível com condições padrão.":s>=500?"Score médio. Quitando dívidas e conectando Open Finance você melhora.":"Score baixo. Reduza dívidas e conecte o DeasBank para melhorar.";
 
-function ScoreRing({ score }: { score: number }) {
-  const c=314, pct=Math.min(1,Math.max(0,(score-300)/650));
-  return (
-    <div className="score-ring-wrap" style={{width:130,height:130}}>
-      <svg viewBox="0 0 120 120"><circle className="sr-bg" cx="60" cy="60" r="50"/><circle className="sr-fill" cx="60" cy="60" r="50" strokeDasharray={c} strokeDashoffset={c-(c*pct)} stroke={scoreColor(score)}/></svg>
-      <div className="sr-val" style={{color:scoreColor(score),fontSize:30}}>{score}</div>
-    </div>
-  );
-}
+const fmt = (v:number) => Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const scoreColor = (s:number) => s>=800?"#22C55E":s>=700?"#3B82F6":s>=600?"#D4A84F":s>=500?"#F59E0B":"#EF4444";
+const scoreLabel = (s:number) => s>=800?"Excelente":s>=700?"Bom":s>=600?"Regular":s>=500?"Médio":"Baixo";
 
-export default function Credito() {
-  const {account,refresh,toast} = useApp();
-  const [amount,setAmount] = useState("");
-  const [loading,setLoading] = useState(false);
-  const [done,setDone] = useState<number|null>(null);
-  const score = account?.creditScore||500;
-  const pre = account?.preApproved||0;
-  const val = parseFloat(amount.replace(",",".")) || 0;
+export default function CreditoPage() {
+  const { account, refresh, toast, balVis } = useApp();
+  const [amount, setAmount] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
-  async function requestLoan(e:any) {
-    e.preventDefault();
-    if(!val||val<100) return toast("Valor mínimo: R$ 100,00","error");
-    if(val>pre) return toast(`Valor excede o pré-aprovado de ${money(pre)}.`,"error");
-    setLoading(true);
-    try {
-      const r = await fetch("/api/account/loan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:val})});
-      const d = await r.json();
-      if(!r.ok) throw new Error(d.message);
-      await refresh(); setDone(val);
-    } catch(err:any){ toast(err.message,"error"); }
-    finally { setLoading(false); }
+  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
+    let raw = e.target.value.replace(/\D/g,"");
+    if (!raw) { setAmount(""); return; }
+    const n = parseInt(raw,10)/100;
+    setAmount(n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}));
   }
 
-  if(done) return (
-    <div className="page-wrap medium">
-      <div className="form-card" style={{textAlign:"center"}}>
-        <div className="receipt-ico">💳</div>
-        <div className="receipt-amount" style={{color:"var(--green)"}}>{money(done)}</div>
-        <p className="receipt-desc">Empréstimo aprovado e creditado!</p>
-        <div>
-          {[["Tipo","Empréstimo Deas Finance"],["Data",new Date().toLocaleDateString("pt-BR")],["Status","Aprovado"],["Novo saldo",money(account?.balance||0)]].map(([k,v])=>(
-            <div key={k} className="receipt-row"><span className="rk">{k}</span><span className="rv">{v}</span></div>
-          ))}
-        </div>
-        <div className="f-grid mt16">
-          <button className="btn btn-secondary" onClick={()=>setDone(null)}>Simular outro</button>
-          <button className="btn btn-primary" onClick={()=>window.location.href="/dashboard"}>Ir ao início</button>
-        </div>
-      </div>
-    </div>
-  );
+  const numVal = parseFloat(amount.replace(/\./g,"").replace(",",".")) || 0;
+  const score = account?.creditScore ?? 500;
+  const circumference = 314;
+  const pct = Math.min(1,Math.max(0,(score-300)/650));
+  const offset = circumference - circumference*pct;
+
+  const factors = [
+    { ok: (account?.balance||0) > 1000, text: "Saldo positivo" },
+    { ok: (account?.debt||0) < 1000, text: "Dívida controlada" },
+    { ok: (account?.loansTotal||0) < 5000, text: "Poucos empréstimos" },
+    { ok: (account?.estimatedIncome||0) > 2000, text: "Renda estimada" },
+  ];
+
+  async function handleLoan(e: React.FormEvent) {
+    e.preventDefault();
+    if (numVal < 100) { toast("Mínimo: R$ 100,00","error"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/account/loan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:numVal})});
+      const d = await res.json();
+      if (!res.ok) { toast(d.message||"Erro.","error"); return; }
+      await refresh();
+      setDone(true);
+      toast("Empréstimo aprovado e creditado!","success");
+      setAmount("");
+    } finally { setLoading(false); }
+  }
 
   return (
     <div className="page-wrap medium">
-      <a href="/dashboard" className="back-link">← Voltar</a>
-      <div className="g2 mb16">
-        {/* SCORE */}
-        <div className="card">
-          <p className="eyebrow mb12">Score de crédito</p>
+      <Link href="/dashboard" className="back-link">← Voltar</Link>
+      <div className="g2">
+        <div className="form-card">
+          <p className="eyebrow">Score de crédito</p>
+          <h3 style={{marginBottom:16}}>Sua pontuação</h3>
           <div className="score-section">
-            <ScoreRing score={score}/>
+            <div className="score-ring-wrap">
+              <svg viewBox="0 0 120 120"><circle className="sr-bg" cx="60" cy="60" r="50"/><circle className="sr-fill" cx="60" cy="60" r="50" strokeDasharray={circumference} strokeDashoffset={offset} stroke={scoreColor(score)}/></svg>
+              <div className="sr-val" style={{color:scoreColor(score)}}>{score}</div>
+            </div>
             <div className="score-info">
-              <span className="sc-label">Classificação atual</span>
-              <div className="sc-cat" style={{color:scoreColor(score)}}>{scoreCat(score)}</div>
-              <p style={{fontSize:13}}>{scoreDesc(score)}</p>
+              <span className="sc-label">Pontuação</span>
+              <div className="sc-cat" style={{color:scoreColor(score)}}>{scoreLabel(score)}</div>
+              <p>Score calculado com base no seu perfil financeiro.</p>
             </div>
           </div>
-          <div className="score-factors mt16">
-            <p style={{fontSize:12,fontWeight:700,color:"var(--tx-3)",letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>Fatores do score</p>
-            {(account?.balance||0)>500&&<div className="sf"><div className="sf-dot" style={{background:"var(--green-bg)",color:"var(--green)"}}>+</div><span style={{fontSize:13}}>Saldo positivo em conta</span></div>}
-            {(account?.debt||0)>0&&<div className="sf"><div className="sf-dot" style={{background:"var(--red-bg)",color:"var(--red)"}}>-</div><span style={{fontSize:13}}>Dívida pendente de {money(account!.debt)}</span></div>}
-            {(account?.loansTotal||0)>0&&<div className="sf"><div className="sf-dot" style={{background:"var(--red-bg)",color:"var(--red)"}}>-</div><span style={{fontSize:13}}>Empréstimos: {money(account!.loansTotal)}</span></div>}
-            {(account?.estimatedIncome||0)>0&&<div className="sf"><div className="sf-dot" style={{background:"var(--green-bg)",color:"var(--green)"}}>+</div><span style={{fontSize:13}}>Renda estimada considerada</span></div>}
-            <div className="sf"><div className="sf-dot" style={{background:"var(--blue-bg)",color:"var(--blue)"}}>ℹ</div><span style={{fontSize:13}}>Conecte o DeasBank para análise completa</span></div>
-          </div>
-        </div>
-
-        {/* LOAN */}
-        <div className="form-card">
-          <p className="eyebrow">Empréstimo Deas</p>
-          <h3 className="mt8">Crédito pré-aprovado</h3>
-          <span className="big-num">{money(pre)}</span>
-          <p className="muted" style={{fontSize:13.5,marginBottom:20}}>Valor calculado com base em score ({score}), saldo, dívida e renda estimada de {money(account?.estimatedIncome||0)}/mês.</p>
-          {pre <= 0 ? (
-            <div className="warn-box">Seu pré-aprovado está zerado. Reduza dívidas, aumente o saldo ou conecte o DeasBank via Open Finance para liberar crédito.</div>
-          ) : (
-            <form onSubmit={requestLoan} className="f-grid">
-              <label className="field-label">Valor desejado
-                <input className="f-input" value={amount} onChange={e=>setAmount(e.target.value)} type="number" min="100" max={pre} step="50" placeholder={`Máximo: ${money(pre)}`}/>
-              </label>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {[1000,2500,5000].filter(v=>v<=pre).map(p=><button key={p} type="button" className="btn btn-ghost btn-sm" onClick={()=>setAmount(String(p))}>{money(p)}</button>)}
-                <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setAmount(String(Math.floor(pre)))}>Máximo</button>
+          <div className="score-factors">
+            {factors.map((f,i)=>(
+              <div key={i} className="sf">
+                <div className="sf-dot" style={{background:f.ok?"var(--green-bg)":"var(--red-bg)",color:f.ok?"var(--green)":"var(--red)"}}>{f.ok?"✓":"✗"}</div>
+                <span style={{color:f.ok?"var(--tx)":"var(--tx-2)"}}>{f.text}</span>
               </div>
-              {val>0&&<div className="info-box">💡 Nova dívida total após o empréstimo: <b>{money((account?.debt||0)+val)}</b></div>}
-              <button className="btn btn-primary btn-w" type="submit" disabled={loading||!val||val>pre}>{loading?"Analisando...":"💳 Solicitar empréstimo"}</button>
-            </form>
-          )}
-          <a href="/open-finance" className="btn btn-secondary btn-w mt12" style={{display:"block",textAlign:"center",marginTop:12}}>🔗 Conectar DeasBank e melhorar score</a>
+            ))}
+          </div>
+          <div className="info-box mt16">Conectar o Open Finance pode melhorar seu score em até 80 pontos.</div>
+          <Link href="/open-finance" className="btn btn-secondary btn-w mt12">Conectar Open Finance</Link>
         </div>
-      </div>
 
-      {/* HISTORY */}
-      <div className="card">
-        <p className="eyebrow mb8">Histórico</p>
-        <h3 style={{marginBottom:6}}>Total de empréstimos contratados</h3>
-        <span className="big-num">{money(account?.loansTotal||0)}</span>
-        <p className="muted" style={{fontSize:13.5}}>Empréstimos aumentam a dívida e impactam negativamente o score. Quite as dívidas geradas para recuperar o limite.</p>
+        <div className="form-card">
+          <p className="eyebrow">Empréstimo</p>
+          <h3>Pré-aprovado</h3>
+          <div className="big-num">{balVis?fmt(account?.preApproved||0):"••••••"}</div>
+          <p className="muted" style={{fontSize:13,marginBottom:20}}>Total contratado: {fmt(account?.loansTotal||0)}</p>
+          {done&&<div className="success-box mb16">✅ Crédito aprovado e creditado na sua conta!</div>}
+          <form className="f-grid" onSubmit={handleLoan}>
+            <label className="field">Valor desejado
+              <div className="money-input-wrap">
+                <span className="money-prefix">R$</span>
+                <input className="fi" inputMode="numeric" placeholder="0,00" value={amount} onChange={handleAmountChange} required/>
+              </div>
+            </label>
+            <div className="warn-box">O valor não pode exceder o pré-aprovado.</div>
+            <button className="btn btn-primary btn-w" type="submit" disabled={loading}>{loading?"Analisando...":"Solicitar empréstimo"}</button>
+          </form>
+        </div>
       </div>
     </div>
   );

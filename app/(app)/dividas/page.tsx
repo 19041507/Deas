@@ -1,83 +1,79 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useApp } from "@/components/AppShell";
-const money = (v:number) => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-export default function Dividas() {
-  const {account,refresh,toast} = useApp();
-  const router = useRouter();
-  const [amount,setAmount] = useState("");
-  const [loading,setLoading] = useState(false);
-  const [done,setDone] = useState<number|null>(null);
-  const debt = account?.debt || 0;
-  const val = parseFloat(amount.replace(",",".")) || 0;
 
-  async function pay(e:any) {
-    e.preventDefault();
-    if(!val||val<=0) return toast("Informe um valor.","error");
-    if(val>debt) return toast("Valor maior que a dívida atual.","error");
-    if(val>(account?.balance||0)) return toast("Saldo insuficiente.","error");
-    setLoading(true);
-    try {
-      const r = await fetch("/api/account/pay-debt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:val})});
-      const d = await r.json();
-      if(!r.ok) throw new Error(d.message);
-      await refresh(); setDone(val);
-    } catch(err:any){ toast(err.message,"error"); }
-    finally { setLoading(false); }
+const fmt = (v:number) => Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+
+export default function DividasPage() {
+  const { account, refresh, toast, balVis } = useApp();
+  const [amount, setAmount] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
+    let raw = e.target.value.replace(/\D/g,"");
+    if (!raw) { setAmount(""); return; }
+    const n = parseInt(raw,10)/100;
+    setAmount(n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}));
   }
 
-  if(done) return (
-    <div className="page-wrap narrow">
-      <div className="form-card" style={{textAlign:"center"}}>
-        <div className="receipt-ico">📋</div>
-        <div className="receipt-amount" style={{color:"var(--green)"}}>{money(done)}</div>
-        <p className="receipt-desc">Pagamento realizado! Seu score foi recalculado.</p>
-        <div>
-          {[["Tipo","Pagamento de dívida"],["Dívida restante",money(account?.debt||0)],["Novo score",String(account?.creditScore||"—")],["Status","Concluído"]].map(([k,v])=>(
-            <div key={k} className="receipt-row"><span className="rk">{k}</span><span className="rv">{v}</span></div>
-          ))}
-        </div>
-        <div className="f-grid mt16">
-          <button className="btn btn-secondary" onClick={()=>{setDone(null);setAmount("");}}>Pagar mais</button>
-          <button className="btn btn-primary" onClick={()=>router.push("/dashboard")}>Ir ao início</button>
-        </div>
-      </div>
-    </div>
-  );
+  const debt = account?.debt ?? 0;
+  const numVal = parseFloat(amount.replace(/\./g,"").replace(",",".")) || 0;
+
+  async function handlePay(e: React.FormEvent) {
+    e.preventDefault();
+    if (numVal < 1) { toast("Valor mínimo: R$ 1,00","error"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/account/pay-debt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:numVal})});
+      const d = await res.json();
+      if (!res.ok) { toast(d.message||"Erro.","error"); return; }
+      await refresh();
+      setDone(true);
+      toast("Pagamento realizado! Score atualizado.","success");
+    } finally { setLoading(false); }
+  }
 
   return (
     <div className="page-wrap narrow">
-      <a href="/dashboard" className="back-link">← Voltar</a>
-      {debt <= 0 ? (
-        <div className="form-card" style={{textAlign:"center"}}>
-          <div style={{fontSize:56,marginBottom:8}}>🎉</div>
-          <h3>Sem dívidas!</h3>
-          <p className="muted" style={{marginTop:8,marginBottom:20}}>Você não possui nenhuma dívida pendente. Continue assim!</p>
-          <button className="btn btn-primary btn-w" onClick={()=>router.push("/dashboard")}>Voltar ao início</button>
+      <Link href="/dashboard" className="back-link">← Voltar</Link>
+      <div className="form-card">
+        <p className="eyebrow">Conta</p>
+        <h3>Pagar dívida</h3>
+        <p className="sub">O pagamento usa seu saldo e melhora seu score de crédito automaticamente.</p>
+
+        {done&&<div className="success-box mb16">✅ Pagamento registrado! Novo score: <strong>{account?.creditScore}</strong></div>}
+
+        <div style={{display:"grid",gap:10,marginBottom:20}}>
+          <div className="card" style={{padding:"16px",background:"var(--red-bg)",border:"1px solid var(--red-bd)"}}>
+            <span style={{fontSize:10,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--red)",display:"block",marginBottom:4}}>Dívida pendente</span>
+            <span style={{fontSize:28,fontWeight:800,letterSpacing:"-.05em",color:"var(--red)"}}>{balVis?fmt(debt):"••••••"}</span>
+          </div>
+          <div className="card" style={{padding:"14px 16px",background:"rgba(255,255,255,0.03)"}}>
+            <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:"var(--tx-3)",display:"block",marginBottom:3}}>Saldo disponível</span>
+            <span style={{fontSize:18,fontWeight:700,color:"var(--green)"}}>{balVis?fmt(account?.balance||0):"••••••"}</span>
+          </div>
         </div>
-      ) : (
-        <div className="form-card">
-          <p className="eyebrow">Dívida pendente</p>
-          <h3>Pagar dívida</h3>
-          <p className="sub">Pagamentos melhoram seu score e aumentam o pré-aprovado.</p>
-          <div className="g2 mb16 mt16">
-            <div className="card card-gold"><span className="card-label">Dívida total</span><span style={{fontFamily:"Outfit",fontSize:26,fontWeight:900,color:"var(--red)"}}>{money(debt)}</span></div>
-            <div className="card"><span className="card-label">Saldo disponível</span><span style={{fontFamily:"Outfit",fontSize:26,fontWeight:900,color:"var(--green)"}}>{money(account?.balance||0)}</span></div>
-          </div>
-          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setAmount(String(debt))}>Pagar tudo</button>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setAmount(String(Math.floor(debt/2)))}>Metade</button>
-          </div>
-          <form onSubmit={pay} className="f-grid">
-            <label className="field-label">Valor a pagar
-              <input className="f-input" value={amount} onChange={e=>setAmount(e.target.value)} type="number" min="1" step="0.01" placeholder="Ex: 500.00"/>
+
+        {debt > 0 ? (
+          <form className="f-grid" onSubmit={handlePay}>
+            <label className="field">Valor a pagar
+              <div className="money-input-wrap">
+                <span className="money-prefix">R$</span>
+                <input className="fi" inputMode="numeric" placeholder="0,00" value={amount} onChange={handleAmountChange} required/>
+              </div>
             </label>
-            <div className="info-box">📊 Pagar dívidas recalcula o score automaticamente e pode aumentar seu limite pré-aprovado.</div>
-            <button className="btn btn-primary btn-w" type="submit" disabled={loading}>{loading?"Processando...":"📋 Confirmar pagamento"}</button>
+            <div className="info-box">💡 Pagar dívidas melhora seu score e aumenta o limite pré-aprovado.</div>
+            <div className="g2">
+              <button type="button" className="btn btn-secondary" onClick={()=>{ const d=fmt(debt).replace("R$ ","").trim(); const raw=d.replace(/\./g,"").replace(",","."); const n=parseFloat(raw); if(!isNaN(n)){const str=(n*100).toFixed(0); const m=parseInt(str,10)/100; setAmount(m.toLocaleString("pt-BR",{minimumFractionDigits:2}));} }}>Pagar tudo</button>
+              <button className="btn btn-danger" type="submit" disabled={loading}>{loading?"Pagando...":"Pagar agora"}</button>
+            </div>
           </form>
-        </div>
-      )}
+        ) : (
+          <div className="success-box">✅ Nenhuma dívida pendente! Seu histórico está limpo.</div>
+        )}
+      </div>
     </div>
   );
 }

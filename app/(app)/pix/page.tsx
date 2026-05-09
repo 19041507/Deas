@@ -1,129 +1,158 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Zap, CheckCircle, Copy } from "lucide-react";
 import { useApp } from "@/components/AppShell";
-const money = (v:number) => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-type Step = 1|2|3|4;
-export default function Pix() {
-  const {account,refresh,toast} = useApp();
-  const router = useRouter();
-  const [step,setStep] = useState<Step>(1);
-  const [name,setName] = useState("");
-  const [amount,setAmount] = useState("");
-  const [desc,setDesc] = useState("");
-  const [loading,setLoading] = useState(false);
-  const [txId,setTxId] = useState("");
-  const [errs,setErrs] = useState<any>({});
-  const val = parseFloat(amount.replace(",",".")) || 0;
 
-  function validate() {
-    const e:any={};
-    if(!name.trim()) e.name="Informe o favorecido.";
-    if(!val||val<=0) e.amount="Informe um valor válido.";
-    if(val>50000) e.amount="Limite por Pix: R$ 50.000,00";
-    if(val>(account?.balance||0)) e.amount="Saldo insuficiente.";
-    setErrs(e); return !Object.keys(e).length;
+const fmt = (v:number) => Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const genId = () => "PIX"+Date.now().toString(36).toUpperCase();
+
+export default function PixPage() {
+  const { account, refresh, toast } = useApp();
+  const [step, setStep] = useState(0); // 0=form 1=review 2=pin 3=done
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [desc, setDesc] = useState("");
+  const [pin, setPin] = useState(["","","","","",""]);
+  const [loading, setLoading] = useState(false);
+  const [txId, setTxId] = useState("");
+
+  const numVal = parseFloat(amount.replace(/\./g,"").replace(",",".")) || 0;
+
+  function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
+    let raw = e.target.value.replace(/\D/g,"");
+    if (!raw) { setAmount(""); return; }
+    const n = parseInt(raw,10)/100;
+    setAmount(n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}));
   }
 
-  async function send() {
+  function validateForm() {
+    if (!name.trim()) { toast("Informe o favorecido.","error"); return false; }
+    if (numVal < 0.01) { toast("Valor inválido.","error"); return false; }
+    if (numVal > 50000) { toast("Limite por Pix: R$ 50.000,00","error"); return false; }
+    if (account && numVal > account.balance) { toast("Saldo insuficiente.","error"); return false; }
+    return true;
+  }
+
+  function handlePinChange(i:number, v:string) {
+    if (!/^\d?$/.test(v)) return;
+    const next = [...pin]; next[i] = v; setPin(next);
+    if (v && i < 5) {
+      const el = document.getElementById(`pin-${i+1}`);
+      el?.focus();
+    }
+  }
+
+  async function confirmPix() {
     setLoading(true);
     try {
-      const r = await fetch("/api/account/pix",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:val,creditor:name,description:desc})});
-      const d = await r.json();
-      if(!r.ok) throw new Error(d.message);
-      setTxId(d.txId||"");
+      const res = await fetch("/api/account/pix",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:numVal,creditor:name.trim(),description:desc})});
+      const d = await res.json();
+      if (!res.ok) { toast(d.message||"Erro ao enviar Pix.","error"); setStep(1); return; }
+      setTxId(d.txId || genId());
       await refresh();
-      setStep(4);
-    } catch(err:any){ toast(err.message,"error"); }
-    finally { setLoading(false); }
+      setStep(3);
+    } finally { setLoading(false); }
   }
 
-  const steps = [{n:1,l:"Dados"},{n:2,l:"Revisão"},{n:3,l:"Confirmar"},{n:4,l:"Comprovante"}];
+  const steps = ["Dados","Revisão","Confirmar","Comprovante"];
+  const bal = account?.balance ?? 0;
+
   return (
     <div className="page-wrap narrow">
-      <a href="/dashboard" className="back-link">← Voltar</a>
-      <div className="steps">
+      <Link href="/dashboard" className="back-link">← Voltar</Link>
+
+      {/* Step indicator */}
+      <div className="steps mb20">
         {steps.map((s,i)=>(
-          <>
-            <div key={s.n} className={`step${step>s.n?" done":step===s.n?" active":""}`}>
-              <div className="step-num">{step>s.n?"✓":s.n}</div>
-              <div className="step-label">{s.l}</div>
+          <div key={s} style={{display:"flex",alignItems:"center",flex:i<steps.length-1?1:"none",gap:6}}>
+            <div className={`step ${step===i?"active":""} ${step>i?"done":""}`} style={{display:"flex",alignItems:"center",gap:6}}>
+              <div className="step-num">{step>i?"✓":i+1}</div>
+              <span className="step-lbl" style={{display:window?.innerWidth>560||step===i?"block":"none"}}>{s}</span>
             </div>
-            {i<steps.length-1&&<div className={`step-line${step>s.n?" done":""}`}/>}
-          </>
+            {i<steps.length-1&&<div className={`step-line ${step>i?"done":""}`}/>}
+          </div>
         ))}
       </div>
 
+      {/* STEP 0: Dados */}
+      {step===0&&(
+        <div className="form-card">
+          <p className="eyebrow">Pix</p>
+          <h3>Enviar dinheiro</h3>
+          <p className="sub">Transferência instantânea e gratuita.</p>
+          <div className="f-grid">
+            <label className="field">Favorecido<input className="fi" placeholder="Nome ou chave Pix" value={name} onChange={e=>setName(e.target.value)}/></label>
+            <label className="field">Valor
+              <div className="money-input-wrap">
+                <span className="money-prefix">R$</span>
+                <input className="fi" inputMode="numeric" placeholder="0,00" value={amount} onChange={handleAmountChange}/>
+              </div>
+            </label>
+            <label className="field">Descrição (opcional)<input className="fi" placeholder="Ex: aluguel" value={desc} onChange={e=>setDesc(e.target.value)}/></label>
+            <div className="info-box">Saldo disponível: <strong>{fmt(bal)}</strong></div>
+            <button className="btn btn-primary btn-w" onClick={()=>{if(validateForm())setStep(1);}}>Continuar →</button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 1: Revisão */}
       {step===1&&(
         <div className="form-card">
-          <p className="eyebrow">Transferência Pix</p>
-          <h3>Para quem você vai enviar?</h3>
-          <p className="sub">Saldo disponível: <b style={{color:"var(--green)"}}>{money(account?.balance||0)}</b></p>
-          <div className="f-grid mt16">
-            <label className="field-label">Favorecido
-              <input className={`f-input${errs.name?" err":""}`} value={name} onChange={e=>{setName(e.target.value);setErrs((p:any)=>{const n={...p};delete n.name;return n;})}} placeholder="Nome do destinatário"/>
-              {errs.name&&<span className="field-err">{errs.name}</span>}
-            </label>
-            <label className="field-label">Valor (R$)
-              <input className={`f-input${errs.amount?" err":""}`} value={amount} onChange={e=>{setAmount(e.target.value);setErrs((p:any)=>{const n={...p};delete n.amount;return n;})}} placeholder="0,00" type="number" min="0.01" step="0.01"/>
-              {errs.amount&&<span className="field-err">{errs.amount}</span>}
-            </label>
-            <label className="field-label">Descrição (opcional)
-              <input className="f-input" value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Ex: almoço, divisão de conta..."/>
-            </label>
-            <button className="btn btn-primary btn-w" onClick={()=>{if(validate())setStep(2)}}>Revisar Pix →</button>
+          <p className="eyebrow">Confirme os dados</p>
+          <h3>Revisão do Pix</h3>
+          <p className="sub">Verifique antes de confirmar.</p>
+          <div className="pix-review mt16">
+            <div className="pr-amount">{fmt(numVal)}</div>
+            <div className="pr-row"><span className="pk">Para</span><span className="pv">{name}</span></div>
+            {desc&&<div className="pr-row"><span className="pk">Descrição</span><span className="pv">{desc}</span></div>}
+            <div className="pr-row"><span className="pk">Saldo após</span><span className="pv">{fmt(bal-numVal)}</span></div>
+            <div className="pr-row"><span className="pk">Data</span><span className="pv">{new Date().toLocaleString("pt-BR")}</span></div>
+          </div>
+          <div className="g2 mt16">
+            <button className="btn btn-secondary" onClick={()=>setStep(0)}>← Corrigir</button>
+            <button className="btn btn-primary" onClick={()=>setStep(2)}>Confirmar →</button>
           </div>
         </div>
       )}
 
+      {/* STEP 2: PIN */}
       {step===2&&(
         <div className="form-card">
-          <p className="eyebrow">Revisão</p>
-          <h3>Confira os dados antes de enviar</h3>
-          <div className="pix-review mt16">
-            <div className="pr-amount">{money(val)}</div>
-            {[["Para",name],["Descrição",desc||"—"],["Saldo após",money((account?.balance||0)-val)]].map(([k,v])=>(
-              <div key={k} className="pr-row"><span className="pk">{k}</span><span className="pv">{v}</span></div>
+          <p className="eyebrow">Autenticação</p>
+          <h3>Digite seu PIN</h3>
+          <p className="sub">Insira os 6 dígitos do seu PIN para autorizar o Pix de <strong>{fmt(numVal)}</strong>.</p>
+          <div className="pin-wrap mt16">
+            {pin.map((d,i)=>(
+              <input key={i} id={`pin-${i}`} className="pin-digit" type="password" inputMode="numeric" maxLength={1} value={d}
+                onChange={e=>handlePinChange(i,e.target.value)}
+                onKeyDown={e=>{if(e.key==="Backspace"&&!d&&i>0){document.getElementById(`pin-${i-1}`)?.focus();}}}/>
             ))}
           </div>
-          <div className="f-grid mt16">
-            <button className="btn btn-secondary" onClick={()=>setStep(1)}>← Editar</button>
-            <button className="btn btn-primary" onClick={()=>setStep(3)}>Confirmar →</button>
+          <div className="warn-box mt16">Em ambiente de demonstração qualquer PIN é aceito.</div>
+          <div className="g2 mt16">
+            <button className="btn btn-secondary" onClick={()=>setStep(1)}>← Voltar</button>
+            <button className="btn btn-primary" disabled={loading} onClick={confirmPix}>{loading?"Enviando...":"Autorizar Pix"}</button>
           </div>
         </div>
       )}
 
+      {/* STEP 3: Comprovante */}
       {step===3&&(
-        <div className="form-card">
-          <p className="eyebrow">Confirmação</p>
-          <h3>Autorizar transferência</h3>
-          <div className="pix-review mt16" style={{textAlign:"center"}}>
-            <p style={{fontSize:14,color:"var(--tx-2)",marginBottom:8}}>Você está enviando</p>
-            <div className="pr-amount">{money(val)}</div>
-            <p style={{fontSize:14,color:"var(--tx-2)"}}>para <b style={{color:"var(--tx)"}}>{name}</b></p>
-          </div>
-          <div className="warn-box mt16">⚠️ Esta ação irá debitar o valor do seu saldo disponível. Não é possível cancelar após a confirmação.</div>
-          <div className="f-grid mt16">
-            <button className="btn btn-secondary" onClick={()=>setStep(2)}>← Voltar</button>
-            <button className="btn btn-primary" onClick={send} disabled={loading}>{loading?"Enviando...":"✅ Confirmar e enviar"}</button>
-          </div>
-        </div>
-      )}
-
-      {step===4&&(
         <div className="form-card" style={{textAlign:"center"}}>
-          <div className="receipt-ico">✅</div>
-          <div className="receipt-amount" style={{color:"var(--green)"}}>{money(val)}</div>
-          <p className="receipt-desc">Pix enviado com sucesso!</p>
-          <div>
-            {[["Favorecido",name],["Data",new Date().toLocaleDateString("pt-BR")],["Horário",new Date().toLocaleTimeString("pt-BR")],["Status","Concluído"]].map(([k,v])=>(
-              <div key={k} className="receipt-row"><span className="rk">{k}</span><span className="rv">{v}</span></div>
-            ))}
+          <div style={{fontSize:56,marginBottom:8}}>✅</div>
+          <h3 style={{fontSize:22}}>Pix enviado!</h3>
+          <p className="sub">Transferência realizada com sucesso.</p>
+          <div className="pix-review" style={{textAlign:"left",marginTop:16}}>
+            <div className="pr-amount" style={{color:"var(--green)"}}>{fmt(numVal)}</div>
+            <div className="pr-row"><span className="pk">Para</span><span className="pv">{name}</span></div>
+            <div className="pr-row"><span className="pk">Data</span><span className="pv">{new Date().toLocaleString("pt-BR")}</span></div>
+            <div className="pr-row"><span className="pk">Status</span><span className="pv" style={{color:"var(--green)"}}>Concluído</span></div>
           </div>
-          {txId&&<div className="receipt-id">ID da transação · {txId}</div>}
-          <div className="f-grid mt16">
-            <button className="btn btn-secondary" onClick={()=>{setStep(1);setName("");setAmount("");setDesc("");}}>Novo Pix</button>
-            <button className="btn btn-primary" onClick={()=>router.push("/dashboard")}>Ir ao início</button>
+          <p style={{fontSize:11,color:"var(--tx-3)",marginTop:10,fontFamily:"monospace"}}>ID: {txId}</p>
+          <div className="g2 mt16">
+            <button className="btn btn-secondary" onClick={()=>navigator.clipboard?.writeText(txId).then(()=>toast("ID copiado!","success"))}><Copy size={14}/>Copiar ID</button>
+            <Link href="/dashboard" className="btn btn-primary">Voltar ao início</Link>
           </div>
         </div>
       )}
