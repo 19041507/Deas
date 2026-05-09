@@ -68,7 +68,7 @@ export default function PixPage() {
           <div key={s} style={{display:"flex",alignItems:"center",flex:i<steps.length-1?1:"none",gap:6}}>
             <div className={`step ${step===i?"active":""} ${step>i?"done":""}`} style={{display:"flex",alignItems:"center",gap:6}}>
               <div className="step-num">{step>i?"✓":i+1}</div>
-              <span className="step-lbl" style={{display:window?.innerWidth>560||step===i?"block":"none"}}>{s}</span>
+              <span className={`step-lbl ${step===i?"active-lbl":""}`}>{s}</span>
             </div>
             {i<steps.length-1&&<div className={`step-line ${step>i?"done":""}`}/>}
           </div>
