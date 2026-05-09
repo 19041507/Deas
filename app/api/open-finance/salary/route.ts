@@ -1,27 +1,22 @@
-import { getAuthed, normalizeAccount, recalcScore, todayBR, uid, writeDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { refreshScore, todayBR } from "@/lib/account";
+import { ok, fail, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
   const { amount } = await req.json();
-  const value = Number(amount || 0);
-  if (value <= 0) return fail('Informe o valor do salário/renda.');
-  const consent = ctx.db.consents.find(c => c.userId === ctx.user.id && c.status === 'active' && !c.revokedAt);
-  if (!consent) return fail('Conecte o DeasBank antes de trazer salário.');
-  const maxExternal = Number(consent.partnerSnapshot?.externalBalance || 0) + 15000;
-  const received = Math.min(value, maxExternal);
-  ctx.account.availableBalance += received;
-  ctx.account.estimatedIncome += Math.round(received * 0.08);
-  ctx.account.openFinancePartnerSnapshot = { ...(ctx.account.openFinancePartnerSnapshot || {}), requestedSalary: received, estimatedIncome: Math.round(received * 0.2), salaryPortability: true };
-  ctx.account.creditScore = recalcScore(ctx.account, ctx.account.openFinancePartnerSnapshot);
-  ctx.account.preApproved = Math.max(0, Math.round((ctx.account.creditScore - 450) * 15));
-  ctx.account.updatedAt = new Date().toISOString();
-  consent.requestedSalary = received;
-  consent.partnerSnapshot = { ...(consent.partnerSnapshot || {}), requestedSalary: received, salaryPortability: true };
-  ctx.db.transactions.push({ id: uid('tx'), userId: ctx.user.id, accountId: ctx.account.id, creditor: 'Salário recebido via Open Finance', type: 'entrada', value: received, status: 'pago', date: todayBR(), createdAt: new Date().toISOString() });
-  await writeDb(ctx.db);
-  return ok({ account: normalizeAccount(ctx.account), received });
+  const val = Number(amount);
+  if (!val || val <= 0) return fail("Valor inválido.");
+  const consent = await prisma.openFinanceConsent.findFirst({ where: { userId, status: "ativo" } });
+  if (!consent) return fail("Nenhuma conexão Open Finance ativa.");
+  const account = await prisma.account.findUnique({ where: { userId } });
+  if (!account) return fail("Conta não encontrada.");
+  await prisma.openFinanceConsent.update({ where: { id: consent.id }, data: { requestedSalary: val } });
+  await prisma.account.update({ where: { userId }, data: { availableBalance: { increment: val } } });
+  await prisma.transaction.create({ data: { userId, accountId: account.id, creditor: `Portabilidade salarial — ${consent.institutionName}`, type: "entrada", value: val, status: "concluído", date: todayBR() } });
+  await refreshScore(userId);
+  return ok({ ok: true });
 }

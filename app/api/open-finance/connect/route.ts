@@ -1,31 +1,22 @@
-import { getAuthed, normalizeAccount, recalcScore, uid, writeDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { ok, fail, unauth } from "@/lib/http";
+import { seedValues } from "@/lib/account";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
-  const { institutionName, bankName } = await req.json().catch(() => ({}));
-  const targetBank = institutionName || bankName || 'DeasBank';
-  const existing = ctx.db.consents.find(c => c.userId === ctx.user.id && c.targetBank === targetBank && !c.revokedAt);
-  const partnerSnapshot = {
-    externalBalance: Math.round(ctx.account.availableBalance * 0.32 + 1800),
-    externalDebt: Math.round(ctx.account.debt * 0.25),
-    externalLimit: Math.round(ctx.account.limit * 0.55 + 1200),
-    externalLoans: Math.round(ctx.account.loansTotal * 0.2),
-    externalInvestments: Math.round(ctx.account.availableBalance * 0.12),
-    estimatedIncome: Math.round(ctx.account.estimatedIncome * 0.45),
-    creditScore: Math.max(350, Math.min(950, ctx.account.creditScore + 38))
-  };
-  const consent = existing || { id: uid('consent'), userId: ctx.user.id, sourceBank: 'Deas Finance', targetBank, status: 'active', sharedScore: true, sharedTransactions: true, sharedBalance: true, createdAt: new Date().toISOString(), partnerSnapshot };
-  consent.status = 'active';
-  consent.partnerSnapshot = partnerSnapshot;
-  if (!existing) ctx.db.consents.push(consent);
-  ctx.account.openFinancePartnerSnapshot = partnerSnapshot;
-  ctx.account.creditScore = recalcScore(ctx.account, partnerSnapshot);
-  ctx.account.preApproved = Math.max(0, Math.round((ctx.account.creditScore - 450) * 15));
-  ctx.account.updatedAt = new Date().toISOString();
-  await writeDb(ctx.db);
-  return ok({ connection: consent, account: normalizeAccount(ctx.account) });
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
+  const { institutionName } = await req.json();
+  if (!institutionName) return fail("Nome da instituição obrigatório.");
+  const existing = await prisma.openFinanceConsent.findFirst({ where: { userId, institutionName, status: "ativo" } });
+  if (existing) return fail("Esta instituição já está conectada.");
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const seed = seedValues((user?.email || "") + institutionName);
+  const validUntil = new Date(); validUntil.setFullYear(validUntil.getFullYear() + 1);
+  const consent = await prisma.openFinanceConsent.create({
+    data: { userId, institutionName, status: "ativo", externalBalance: seed.balance * 0.8, externalDebt: seed.debt * 0.6, externalLimit: seed.limit * 0.7, externalLoans: seed.preApproved * 0.3, externalInvestments: seed.balance * 0.4, externalScore: seed.score, estimatedIncome: seed.income, validUntil }
+  });
+  await prisma.auditLog.create({ data: { userId, action: "OF_CONNECT", details: { institutionName } } });
+  return ok({ ...consent, externalBalance: Number(consent.externalBalance), externalScore: consent.externalScore });
 }

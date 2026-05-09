@@ -1,27 +1,29 @@
 {
-  "name": "deasfinance-next-openfinance",
-  "version": "1.0.0",
+  "name": "deasfinance-v2",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev --name init",
-    "vercel-build": "prisma generate && prisma db push && next build",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "bcryptjs": "latest",
-    "next": "latest",
-    "prisma": "^6.19.3",
-    "react": "latest",
-    "react-dom": "latest"
+    "@prisma/client": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "lucide-react": "^0.460.0",
+    "next": "15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "typescript": "latest"
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "prisma": "^6.0.0",
+    "typescript": "^5"
   }
 }

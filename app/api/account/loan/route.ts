@@ -1,24 +1,21 @@
-import { getAuthed, normalizeAccount, recalcScore, todayBR, uid, writeDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { refreshScore, todayBR } from "@/lib/account";
+import { ok, fail, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
   const { amount } = await req.json();
-  const value = Number(amount || 0);
-  if (value < 100) return fail('O empréstimo mínimo é R$ 100,00.');
-  const score = recalcScore(ctx.account, ctx.account.openFinancePartnerSnapshot);
-  const max = Math.max(0, Math.round((score - 450) * 15));
-  if (score < 560 || value > max) return fail(`Empréstimo recusado. Limite pré-aprovado atual: R$ ${max.toLocaleString('pt-BR')}.`);
-  ctx.account.availableBalance += value;
-  ctx.account.debt += value;
-  ctx.account.loansTotal += value;
-  ctx.account.creditScore = recalcScore(ctx.account, ctx.account.openFinancePartnerSnapshot);
-  ctx.account.preApproved = Math.max(0, Math.round((ctx.account.creditScore - 450) * 15));
-  ctx.account.updatedAt = new Date().toISOString();
-  ctx.db.transactions.push({ id: uid('tx'), userId: ctx.user.id, accountId: ctx.account.id, creditor: 'Empréstimo Deas', type: 'crédito', value, status: 'pendente', date: todayBR(), createdAt: new Date().toISOString() });
-  await writeDb(ctx.db);
-  return ok(normalizeAccount(ctx.account));
+  const val = Number(amount);
+  if (!val || val < 100) return fail("Valor mínimo: R$ 100,00");
+  const account = await prisma.account.findUnique({ where: { userId } });
+  if (!account) return fail("Conta não encontrada.");
+  if (val > Number(account.preApproved)) return fail(`Valor excede o pré-aprovado de ${Number(account.preApproved).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`);
+  await prisma.account.update({ where: { userId }, data: { availableBalance: { increment: val }, debt: { increment: val }, loansTotal: { increment: val }, preApproved: { decrement: val } } });
+  const tx = await prisma.transaction.create({ data: { userId, accountId: account.id, creditor: "Empréstimo Deas Finance", type: "crédito", value: val, status: "concluído", date: todayBR() } });
+  await prisma.auditLog.create({ data: { userId, action: "LOAN", details: { amount: val } } });
+  await refreshScore(userId);
+  return ok({ transaction: { ...tx, value: Number(tx.value) } });
 }

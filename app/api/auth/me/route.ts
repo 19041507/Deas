@@ -1,10 +1,16 @@
-import { getAuthed, normalizeAccount, publicUser } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { ok, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Sessão expirada. Faça login novamente.', 401);
-  return ok({ user: publicUser(ctx.user), account: normalizeAccount(ctx.account) });
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { account: true } });
+  if (!user?.account) return unauth();
+  const a = user.account;
+  return ok({
+    user: { id: user.id, name: user.fullName, email: user.email, photoURL: user.photoUrl },
+    account: { balance: Number(a.availableBalance), limit: Number(a.limit), debt: Number(a.debt), creditScore: a.creditScore, preApproved: Number(a.preApproved), loansTotal: Number(a.loansTotal), estimatedIncome: Number(a.estimatedIncome) }
+  });
 }

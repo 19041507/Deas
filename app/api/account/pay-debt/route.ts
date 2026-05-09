@@ -1,22 +1,22 @@
-import { getAuthed, normalizeAccount, recalcScore, todayBR, uid, writeDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { refreshScore, todayBR } from "@/lib/account";
+import { ok, fail, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
   const { amount } = await req.json();
-  const requested = Number(amount || 0);
-  if (requested <= 0) return fail('Informe um valor maior que zero.');
-  const paid = Math.min(requested, ctx.account.debt, ctx.account.availableBalance);
-  if (paid <= 0) return fail('Não há dívida ou saldo suficiente para pagar.');
-  ctx.account.availableBalance -= paid;
-  ctx.account.debt -= paid;
-  ctx.account.creditScore = recalcScore(ctx.account, ctx.account.openFinancePartnerSnapshot);
-  ctx.account.preApproved = Math.max(0, Math.round((ctx.account.creditScore - 450) * 15));
-  ctx.account.updatedAt = new Date().toISOString();
-  ctx.db.transactions.push({ id: uid('tx'), userId: ctx.user.id, accountId: ctx.account.id, creditor: 'Pagamento de dívida', type: 'saída', value: -paid, status: 'pago', date: todayBR(), createdAt: new Date().toISOString() });
-  await writeDb(ctx.db);
-  return ok(normalizeAccount(ctx.account));
+  const val = Number(amount);
+  if (!val || val <= 0) return fail("Valor inválido.");
+  const account = await prisma.account.findUnique({ where: { userId } });
+  if (!account) return fail("Conta não encontrada.");
+  if (Number(account.availableBalance) < val) return fail("Saldo insuficiente.");
+  if (Number(account.debt) <= 0) return fail("Nenhuma dívida pendente.");
+  const payAmount = Math.min(val, Number(account.debt));
+  await prisma.account.update({ where: { userId }, data: { availableBalance: { decrement: payAmount }, debt: { decrement: payAmount } } });
+  const tx = await prisma.transaction.create({ data: { userId, accountId: account.id, creditor: "Pagamento de dívida", type: "pagamento", value: -payAmount, status: "concluído", date: todayBR() } });
+  await refreshScore(userId);
+  return ok({ transaction: { ...tx, value: Number(tx.value) } });
 }

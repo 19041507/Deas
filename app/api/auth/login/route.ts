@@ -1,12 +1,20 @@
-import { comparePassword, createToken, publicUser, readDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { comparePassword, createToken, setCookieHeader } from "@/lib/auth";
+import { fail } from "@/lib/http";
+import { NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const { email, password } = await req.json();
-  const db = await readDb();
-  const user = db.users.find(u => u.email === String(email || '').trim().toLowerCase());
-  if (!user || !(await comparePassword(String(password || ''), user.passwordHash))) return fail('E-mail ou senha inválidos.', 401);
-  return ok({ token: createToken(user.id), user: publicUser(user) });
+  try {
+    const { email, password } = await req.json();
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail || !password) return fail("Informe e-mail e senha.");
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (!user || !(await comparePassword(password, user.passwordHash))) return fail("E-mail ou senha incorretos.");
+    await prisma.auditLog.create({ data: { userId: user.id, action: "LOGIN" } });
+    const token = createToken(user.id);
+    const res = NextResponse.json({ user: { id: user.id, name: user.fullName, email: user.email, photoURL: user.photoUrl } });
+    res.headers.set("Set-Cookie", setCookieHeader(token));
+    return res;
+  } catch (e: any) { return fail(e.message || "Erro ao fazer login.", 500); }
 }
