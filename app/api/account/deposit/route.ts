@@ -1,19 +1,20 @@
-import { getAuthed, normalizeAccount, recalcScore, todayBR, uid, writeDb } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { prisma } from "@/lib/prisma";
+import { tokenFromRequest } from "@/lib/auth";
+import { refreshScore, todayBR } from "@/lib/account";
+import { ok, fail, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
+  const userId = tokenFromRequest(req);
+  if (!userId) return unauth();
   const { amount } = await req.json();
-  const value = Number(amount || 0);
-  if (value <= 0) return fail('Informe um valor maior que zero.');
-  ctx.account.availableBalance += value;
-  ctx.account.creditScore = recalcScore(ctx.account, ctx.account.openFinancePartnerSnapshot);
-  ctx.account.preApproved = Math.max(0, Math.round((ctx.account.creditScore - 450) * 15));
-  ctx.account.updatedAt = new Date().toISOString();
-  ctx.db.transactions.push({ id: uid('tx'), userId: ctx.user.id, accountId: ctx.account.id, creditor: 'Depósito Deas', type: 'entrada', value, status: 'pago', date: todayBR(), createdAt: new Date().toISOString() });
-  await writeDb(ctx.db);
-  return ok(normalizeAccount(ctx.account));
+  const val = Number(amount);
+  if (!val || val <= 0 || val > 1000000) return fail("Valor inválido. Máximo: R$ 1.000.000,00");
+  const account = await prisma.account.findUnique({ where: { userId } });
+  if (!account) return fail("Conta não encontrada.");
+  const updated = await prisma.account.update({ where: { userId }, data: { availableBalance: { increment: val } } });
+  const tx = await prisma.transaction.create({ data: { userId, accountId: account.id, creditor: "Depósito Deas Finance", type: "entrada", value: val, status: "concluído", date: todayBR() } });
+  await prisma.auditLog.create({ data: { userId, action: "DEPOSIT", details: { amount: val } } });
+  await refreshScore(userId);
+  return ok({ balance: Number(updated.availableBalance), transaction: { ...tx, value: Number(tx.value) } });
 }

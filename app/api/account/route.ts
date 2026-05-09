@@ -1,10 +1,9 @@
-import { getAuthed, normalizeAccount } from '@/lib/store';
-import { fail, ok } from '@/lib/http';
-
-export const dynamic = 'force-dynamic';
+import { getAuthed, normalizeAccount } from "@/lib/store";
+import { ok, unauth } from "@/lib/http";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const ctx = await getAuthed(req);
-  if (!ctx) return fail('Não autorizado.', 401);
-  return ok(normalizeAccount(ctx.account));
+  const { account } = await getAuthed(req);
+  if (!account) return unauth();
+  return ok({ account: normalizeAccount(account) });
 }
