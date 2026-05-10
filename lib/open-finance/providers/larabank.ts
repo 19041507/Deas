@@ -4,9 +4,9 @@
  * Implementa OAuth2 real (Authorization Code Flow) com o Larabank.
  *
  * Endpoints OAuth esperados no Larabank (padrão Laravel Passport):
- *   GET  {LARABANK_API_BASE_URL}/oauth/authorize  → autorização
- *   POST {LARABANK_API_BASE_URL}/oauth/token      → troca de code por token
- *   GET  {LARABANK_API_BASE_URL}/api/accounts     → dados de conta (com Bearer token)
+ *   GET  {LARABANK_API_BASE_URL}/open-finance/authorize  → autorização
+ *   POST {LARABANK_API_BASE_URL}/api/open-finance/token      → troca de code por token
+ *   GET  {LARABANK_API_BASE_URL}/api/open-finance/provider/accounts     → dados de conta (com Bearer token)
  *   DELETE {LARABANK_API_BASE_URL}/api/consents/:id → revogação de consentimento
  *
  * Variáveis de ambiente necessárias:
@@ -24,10 +24,10 @@ const LARABANK_CLIENT_ID     = process.env.LARABANK_CLIENT_ID ?? "";
 const LARABANK_CLIENT_SECRET = process.env.LARABANK_CLIENT_SECRET ?? "";
 
 /** URL de autorização OAuth do Larabank */
-export const LARABANK_AUTH_URL = `${LARABANK_API_BASE_URL}/oauth/authorize`;
+export const LARABANK_AUTH_URL = `${LARABANK_API_BASE_URL}/open-finance/authorize`;
 
 /** URL de troca de code por token do Larabank */
-export const LARABANK_TOKEN_URL = `${LARABANK_API_BASE_URL}/oauth/token`;
+export const LARABANK_TOKEN_URL = `${LARABANK_API_BASE_URL}/api/open-finance/token`;
 
 /**
  * Troca o authorization code por um access token no Larabank.
@@ -76,7 +76,7 @@ export const larabankAdapter: BankAdapter = {
     accessToken: string,
     apiBaseUrl: string
   ): Promise<OpenFinanceAccountData> {
-    const res = await fetch(`${apiBaseUrl}/api/accounts`, {
+    const res = await fetch(`${apiBaseUrl}/api/open-finance/provider/accounts`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept:        "application/json",
@@ -96,7 +96,7 @@ export const larabankAdapter: BankAdapter = {
     const acct = data.account ?? data.data ?? data;
 
     return {
-      availableBalance: Number(acct.availableBalance ?? acct.available_balance ?? acct.saldo_disponivel ?? 0),
+      availableBalance: Number(acct.availableBalance ?? acct.available_balance ?? acct.saldo_disponivel ?? acct.balance ?? 0),
       debt:             Number(acct.debt             ?? acct.divida              ?? acct.debts           ?? 0),
       limit:            Number(acct.limit            ?? acct.limite              ?? acct.credit_limit     ?? 0),
       loans:            Number(acct.loans            ?? acct.emprestimos         ?? acct.loan_total       ?? 0),

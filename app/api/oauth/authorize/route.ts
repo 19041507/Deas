@@ -13,7 +13,7 @@ import crypto from "crypto";
 export const dynamic = "force-dynamic";
 
 const DEAS_CLIENT_ID = process.env.DEAS_CLIENT_ID     ?? "deas_client_001";
-const APP_URL        = process.env.NEXT_PUBLIC_APP_URL ?? "https://larabankdigital2.vercel.app";
+const APP_URL        = process.env.NEXT_PUBLIC_APP_URL ?? "https://deas-three.vercel.app";
 
 export async function GET(req: Request) {
   const url         = new URL(req.url);

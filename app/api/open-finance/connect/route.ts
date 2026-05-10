@@ -8,7 +8,7 @@
  *   2. Esta rota cria um consentimento com status "pendente" e gera um `state` OAuth
  *   3. Retorna a URL de autorização do banco externo (OAuth2 real)
  *   4. Front-end redireciona o usuário para essa URL
- *   5. Banco externo autentica o usuário e redireciona para /open-finance/callback?code=...&state=...
+ *   5. Banco externo autentica o usuário e redireciona para /api/open-finance/callback?code=...&state=...
  *   6. Callback troca o code por token, ativa o consentimento e sincroniza dados
  *
  * Fluxo para bancos simulados (sem adaptador real):
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const redirectUri = `${appUrl}/open-finance/callback`;
+  const redirectUri = `${appUrl}/api/open-finance/callback`;
 
   // Verifica se a instituição usa OAuth2 real
   const realOAuth = REAL_OAUTH_INSTITUTIONS[institution.slug];

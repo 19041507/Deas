@@ -11,7 +11,7 @@ import { ok, unauth } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://larabankdigital2.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://deas-three.vercel.app";
 const LARABANK_URL = process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app";
 
 const DEFAULT_INSTITUTIONS = [

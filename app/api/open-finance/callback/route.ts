@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const redirectUri = `${appUrl}/open-finance/callback`;
+    const redirectUri = `${appUrl}/api/open-finance/callback`;
 
     let accessToken:  string;
     let refreshToken: string | undefined;
