@@ -39,6 +39,16 @@ const institutions = [
     canReceiveData: false,
     canInitiatePayment: true,
   },
+  {
+    name: "Larabank",
+    slug: "larabank",
+    // URL base real da API do Larabank — cadastrar também LARABANK_CLIENT_ID e LARABANK_CLIENT_SECRET
+    apiBaseUrl: process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app",
+    active: true,
+    canShareData: true,
+    canReceiveData: true,
+    canInitiatePayment: false,
+  },
 ];
 
 async function main() {

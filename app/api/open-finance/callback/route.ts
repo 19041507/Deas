@@ -3,15 +3,15 @@
  *
  * Rota de retorno OAuth após autorização no banco externo.
  *
- * Fluxo:
+ * Fluxo para bancos reais (ex: Larabank):
  *   1. Banco externo redireciona para cá com `code` e `state`
  *   2. Verificamos que o `state` bate com o salvo no consentimento (anti-CSRF)
- *   3. Trocamos o `code` por um accessToken na API do banco
+ *   3. Trocamos o `code` por um accessToken na API do banco (OAuth2 real)
  *   4. Ativamos o consentimento e salvamos os tokens
  *   5. Fazemos a primeira sincronização de dados
  *   6. Redirecionamos o usuário de volta para a tela Open Finance
  *
- * Em simulação:
+ * Fluxo para bancos simulados:
  *   - O code é gerado internamente, então a "troca" é simulada
  *   - O accessToken é derivado do state para gerar dados determinísticos
  */
@@ -19,8 +19,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdapter } from "@/lib/open-finance/adapters";
+import { exchangeCodeForToken } from "@/lib/open-finance/providers/larabank";
 
 export const dynamic = "force-dynamic";
+
+/** Slugs que fazem troca de token real via OAuth2 */
+const REAL_TOKEN_EXCHANGE_SLUGS = new Set(["larabank"]);
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -54,13 +58,25 @@ export async function GET(req: Request) {
   }
 
   try {
-    /**
-     * Em produção: POST {banco}/oauth/token com o `code`
-     * Em simulação: o accessToken é derivado do state para ser determinístico
-     * (assim o simulador gera sempre os mesmos dados para o mesmo usuário/banco)
-     */
-    const accessToken  = `at_${consent.userId}_${consent.institution.slug}_${state.slice(0, 12)}`;
-    const refreshToken = `rt_${state.slice(12, 28)}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const redirectUri = `${appUrl}/open-finance/callback`;
+
+    let accessToken:  string;
+    let refreshToken: string | undefined;
+
+    if (REAL_TOKEN_EXCHANGE_SLUGS.has(consent.institution.slug)) {
+      // Troca real de code por token via OAuth2
+      const tokens = await exchangeCodeForToken(code, redirectUri);
+      accessToken  = tokens.accessToken;
+      refreshToken = tokens.refreshToken;
+    } else {
+      /**
+       * Simulação interna: o accessToken é derivado do state para ser determinístico
+       * (assim o simulador gera sempre os mesmos dados para o mesmo usuário/banco)
+       */
+      accessToken  = `at_${consent.userId}_${consent.institution.slug}_${state.slice(0, 12)}`;
+      refreshToken = `rt_${state.slice(12, 28)}`;
+    }
 
     // Ativa o consentimento com os tokens recebidos
     await prisma.openFinanceConsent.update({

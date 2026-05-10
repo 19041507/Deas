@@ -3,15 +3,15 @@
  *
  * Inicia o fluxo de consentimento Open Finance para uma instituição.
  *
- * Fluxo correto:
+ * Fluxo para bancos reais (ex: Larabank):
  *   1. Usuário escolhe a instituição no front-end
  *   2. Esta rota cria um consentimento com status "pendente" e gera um `state` OAuth
- *   3. Retorna a URL de autorização do banco externo
+ *   3. Retorna a URL de autorização do banco externo (OAuth2 real)
  *   4. Front-end redireciona o usuário para essa URL
- *   5. Banco externo redireciona de volta para /api/open-finance/callback?code=...&state=...
+ *   5. Banco externo autentica o usuário e redireciona para /open-finance/callback?code=...&state=...
  *   6. Callback troca o code por token, ativa o consentimento e sincroniza dados
  *
- * Neste projeto (simulação acadêmica):
+ * Fluxo para bancos simulados (sem adaptador real):
  *   - O callback é chamado diretamente com um code simulado
  *   - O "accessToken" é derivado do state para gerar dados determinísticos
  */
@@ -19,7 +19,17 @@
 import { prisma } from "@/lib/prisma";
 import { tokenFromRequest } from "@/lib/auth";
 import { ok, fail, unauth } from "@/lib/http";
+import { LARABANK_AUTH_URL } from "@/lib/open-finance/providers/larabank";
 import crypto from "crypto";
+
+/** Slugs de instituições que usam OAuth2 real (não simulado) */
+const REAL_OAUTH_INSTITUTIONS: Record<string, { authUrl: string; clientIdEnv: string; scopes: string }> = {
+  "larabank": {
+    authUrl:      LARABANK_AUTH_URL,
+    clientIdEnv:  "LARABANK_CLIENT_ID",
+    scopes:       "accounts balances transactions",
+  },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -74,22 +84,43 @@ export async function POST(req: Request) {
     },
   });
 
-  /**
-   * Em produção:
-   *   https://api.banco-externo.com/authorize?client_id=...&redirect_uri=...&state={oauthState}
-   *
-   * Para simulação, o front-end chamará /api/open-finance/callback diretamente.
-   */
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const authorizationUrl =
-    `${appUrl}/api/open-finance/callback` +
-    `?code=sim_${oauthState.slice(0, 16)}` +
-    `&state=${oauthState}`;
+  const redirectUri = `${appUrl}/open-finance/callback`;
+
+  // Verifica se a instituição usa OAuth2 real
+  const realOAuth = REAL_OAUTH_INSTITUTIONS[institution.slug];
+
+  let authorizationUrl: string;
+  let simulated: boolean;
+
+  if (realOAuth) {
+    // OAuth2 real — redireciona para autenticação no banco externo
+    const clientId = process.env[realOAuth.clientIdEnv] ?? "";
+    const params = new URLSearchParams({
+      client_id:     clientId,
+      redirect_uri:  redirectUri,
+      response_type: "code",
+      scope:         realOAuth.scopes,
+      state:         oauthState,
+    });
+    authorizationUrl = `${realOAuth.authUrl}?${params.toString()}`;
+    simulated = false;
+  } else {
+    /**
+     * Simulação interna — o front-end chamará /api/open-finance/callback diretamente.
+     * O "accessToken" é derivado do state para ser determinístico.
+     */
+    authorizationUrl =
+      `${appUrl}/api/open-finance/callback` +
+      `?code=sim_${oauthState.slice(0, 16)}` +
+      `&state=${oauthState}`;
+    simulated = true;
+  }
 
   return ok({
     consentId: consent.id,
     institutionName: institution.name,
     authorizationUrl,
-    simulated: true,
+    simulated,
   });
 }
