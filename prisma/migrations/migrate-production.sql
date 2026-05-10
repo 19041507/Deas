@@ -97,21 +97,28 @@ VALUES
     'inst_deasbank_001',
     'DeasBank',
     'deasbank',
-    'https://SEU-DOMINIO.vercel.app/api/open-finance/external-sim/deasbank',
+    'https://larabankdigital2.vercel.app/api/open-finance/external-sim/deasbank',
     true
   ),
   (
     'inst_alpha_001',
     'Banco Alpha',
     'banco-alpha',
-    'https://SEU-DOMINIO.vercel.app/api/open-finance/external-sim/banco-alpha',
+    'https://larabankdigital2.vercel.app/api/open-finance/external-sim/banco-alpha',
     true
   ),
   (
     'inst_beta_001',
     'Fintech Beta',
     'fintech-beta',
-    'https://SEU-DOMINIO.vercel.app/api/open-finance/external-sim/fintech-beta',
+    'https://larabankdigital2.vercel.app/api/open-finance/external-sim/fintech-beta',
+    true
+  ),
+  (
+    'inst_larabank_001',
+    'Larabank',
+    'larabank',
+    'https://larabankdigital2.vercel.app',
     true
   )
 ON CONFLICT ("slug") DO UPDATE SET
