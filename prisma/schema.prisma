@@ -51,23 +51,70 @@ model Transaction {
   createdAt DateTime @default(now())
 }
 
+// ─── Open Finance ──────────────────────────────────────────────────────────────
+
+/// Catálogo de instituições financeiras parceiras
+model Institution {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique   // ex: "deasbank", "banco-alpha"
+  apiBaseUrl String              // URL base da API do banco externo
+  logoUrl    String?
+  active     Boolean  @default(true)
+  canShareData       Boolean @default(true)   // pode ser fonte de dados
+  canReceiveData     Boolean @default(true)   // pode receber dados
+  canInitiatePayment Boolean @default(false)  // iniciação de pagamento
+  createdAt  DateTime @default(now())
+
+  consents   OpenFinanceConsent[]
+}
+
+/// Autorização concedida pelo usuário para compartilhar dados com uma instituição
 model OpenFinanceConsent {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  institutionName String
-  status          String   @default("ativo")
-  externalBalance Decimal? @db.Decimal(15, 2)
-  externalDebt    Decimal? @db.Decimal(15, 2)
-  externalLimit   Decimal? @db.Decimal(15, 2)
-  externalLoans   Decimal? @db.Decimal(15, 2)
-  externalInvestments Decimal? @db.Decimal(15, 2)
-  externalScore   Int?
-  requestedSalary Decimal? @db.Decimal(15, 2)
-  estimatedIncome Decimal? @db.Decimal(15, 2)
-  validUntil      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+
+  /// pendente | ativo | revogado | expirado | erro
+  status        String   @default("pendente")
+
+  /// Token OAuth recebido do banco externo (armazenar criptografado em produção)
+  accessToken   String?
+  refreshToken  String?
+
+  /// Código aleatório gerado antes do redirect OAuth para prevenir CSRF
+  oauthState    String?
+
+  /// Permissões concedidas pelo usuário: BALANCES_READ, TRANSACTIONS_READ, etc.
+  permissions   String[]
+
+  validUntil    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  snapshots     OpenFinanceSnapshot[]
+}
+
+/// Snapshot dos dados financeiros recebidos de uma instituição em uma sincronização
+model OpenFinanceSnapshot {
+  id               String             @id @default(cuid())
+  consentId        String
+  consent          OpenFinanceConsent @relation(fields: [consentId], references: [id], onDelete: Cascade)
+
+  availableBalance Decimal @db.Decimal(15, 2)
+  debt             Decimal @db.Decimal(15, 2)
+  limit            Decimal @db.Decimal(15, 2)
+  loans            Decimal @db.Decimal(15, 2)
+  investments      Decimal @db.Decimal(15, 2)
+  estimatedIncome  Decimal @db.Decimal(15, 2)
+  externalScore    Int?
+
+  /// Portabilidade salarial (separada dos dados de conta)
+  requestedSalary  Decimal? @db.Decimal(15, 2)
+
+  syncedAt         DateTime @default(now())
 }
 
 model AuditLog {
