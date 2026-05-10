@@ -13,6 +13,7 @@ model User {
   email        String   @unique
   passwordHash String
   photoUrl     String?
+  cpf          String?  @unique
   createdAt    DateTime @default(now())
 
   account      Account?
