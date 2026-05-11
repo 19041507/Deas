@@ -107,7 +107,9 @@ export default function OpenFinancePage() {
       setUrlFeedback(params.get("sync_error") ? "success_sync_error" : "success");
       window.history.replaceState({}, "", "/open-finance");
     } else if (params.get("error")) {
-      setUrlFeedback("error:" + params.get("error"));
+      const detail = params.get("detail");
+      const code = params.get("code");
+      setUrlFeedback("error:" + params.get("error") + (code ? `:${code}` : "") + (detail ? `:${detail}` : ""));
       window.history.replaceState({}, "", "/open-finance");
     }
   }, [load]);
@@ -115,7 +117,11 @@ export default function OpenFinancePage() {
   useEffect(() => {
     if (urlFeedback === "success") toast("Banco conectado com sucesso!", "success");
     else if (urlFeedback === "success_sync_error") toast("Banco conectado, mas a primeira sincronização falhou. Tente sincronizar ou reconectar.", "warning");
-    else if (urlFeedback?.startsWith("error:")) toast("Erro ao conectar. Verifique as credenciais e a rota de token do banco parceiro.", "error");
+    else if (urlFeedback?.startsWith("error:")) {
+      const parts = urlFeedback.split(":");
+      const detail = parts.slice(3).join(":");
+      toast(detail || "Erro ao conectar. Verifique as credenciais e a rota de token do banco parceiro.", "error");
+    }
   }, [urlFeedback, toast]);
 
   // ── Iniciar conexão ──

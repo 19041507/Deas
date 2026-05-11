@@ -37,9 +37,6 @@ export function getLarabankClientSecret() {
   );
 }
 
-const LARABANK_CLIENT_ID = getLarabankClientId();
-const LARABANK_CLIENT_SECRET = getLarabankClientSecret();
-
 function cleanBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
 }
@@ -58,11 +55,16 @@ export const LARABANK_AUTH_URL =
 /**
  * Rotas possíveis de token do Larabank.
  */
-const LARABANK_TOKEN_URLS = [
-  process.env.LARABANK_TOKEN_URL,
-  `${LARABANK_BASE}/api/oauth/token`,
-  `${LARABANK_BASE}/api/open-finance/token`,
-].filter(Boolean) as string[];
+function getLarabankTokenUrls() {
+  return [
+    process.env.LARABANK_TOKEN_URL,
+    `${LARABANK_BASE}/api/oauth/token`,
+    `${LARABANK_BASE}/api/open-finance/token`,
+    `${LARABANK_BASE}/api/open-finance/oauth/token`,
+  ].filter(Boolean) as string[];
+}
+
+const LARABANK_TOKEN_URLS = getLarabankTokenUrls();
 
 /** URL principal de troca de code por token do Larabank */
 export const LARABANK_TOKEN_URL = LARABANK_TOKEN_URLS[0];
@@ -112,9 +114,12 @@ async function postTokenRequest(
     Accept: "application/json",
   };
 
-  if (useBasicAuth && LARABANK_CLIENT_ID && LARABANK_CLIENT_SECRET) {
+  const clientId = getLarabankClientId();
+  const clientSecret = getLarabankClientSecret();
+
+  if (useBasicAuth && clientId && clientSecret) {
     headers.Authorization =
-      "Basic " + Buffer.from(`${LARABANK_CLIENT_ID}:${LARABANK_CLIENT_SECRET}`).toString("base64");
+      "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   }
 
   const res = await fetch(url, {
@@ -142,7 +147,10 @@ export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number }> {
-  if (!LARABANK_CLIENT_ID || !LARABANK_CLIENT_SECRET) {
+  const clientId = getLarabankClientId();
+  const clientSecret = getLarabankClientSecret();
+
+  if (!clientId || !clientSecret) {
     throw {
       code: "MISSING_LARABANK_CREDENTIALS",
       message:
@@ -153,15 +161,15 @@ export async function exchangeCodeForToken(
   const payloads = [
     compactPayload({
       grant_type: "authorization_code",
-      client_id: LARABANK_CLIENT_ID,
-      client_secret: LARABANK_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       redirect_uri: redirectUri,
       code,
     }),
     compactPayload({
       grantType: "authorization_code",
-      clientId: LARABANK_CLIENT_ID,
-      clientSecret: LARABANK_CLIENT_SECRET,
+      clientId: clientId,
+      clientSecret: clientSecret,
       redirectUri,
       code,
     }),
@@ -175,7 +183,7 @@ export async function exchangeCodeForToken(
   let lastError = "";
   const attempts: string[] = [];
 
-  for (const tokenUrl of LARABANK_TOKEN_URLS) {
+  for (const tokenUrl of getLarabankTokenUrls()) {
     for (const payload of payloads) {
       for (const mode of ["json", "form"] as const) {
         for (const useBasicAuth of [false, true]) {

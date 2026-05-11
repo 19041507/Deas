@@ -160,6 +160,11 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.redirect(`${redirectBase}?error=falha_na_conexao`);
+    const errorCode = err?.code ?? "TOKEN_EXCHANGE_FAILED";
+    const errorMessage = err?.message ?? "Erro desconhecido";
+
+    return NextResponse.redirect(
+      `${redirectBase}?error=falha_na_conexao&code=${encodeURIComponent(errorCode)}&detail=${encodeURIComponent(errorMessage.slice(0, 800))}`
+    );
   }
 }

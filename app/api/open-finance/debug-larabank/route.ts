@@ -20,6 +20,7 @@ export async function GET() {
       process.env.LARABANK_TOKEN_URL,
       `${base}/api/oauth/token`,
       `${base}/api/open-finance/token`,
+      `${base}/api/open-finance/oauth/token`,
     ].filter(Boolean),
     hasLarabankClientId: Boolean(clientId),
     larabankClientIdPreview: clientId ? `${clientId.slice(0, 6)}...` : null,
