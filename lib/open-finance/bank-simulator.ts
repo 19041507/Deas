@@ -21,7 +21,7 @@ function generateBankData(accessToken: string, bankSlug: string) {
 
   // Cada banco gera uma faixa diferente de valores para parecer realista
   const bankMultipliers: Record<string, { bal: number; debt: number; lim: number; inc: number }> = {
-    "deasbank":    { bal: 0.8, debt: 0.6, lim: 0.7, inc: 0.9 },
+    "deaspay":     { bal: 0.8, debt: 0.6, lim: 0.7, inc: 0.9 },
     "banco-alpha": { bal: 1.2, debt: 0.3, lim: 1.4, inc: 1.1 },
     "fintech-beta":{ bal: 0.5, debt: 0.8, lim: 0.6, inc: 0.7 },
   };

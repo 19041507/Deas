@@ -30,10 +30,13 @@ CREATE UNIQUE INDEX "Institution_slug_key" ON "Institution"("slug");
 -- Seed das instituições de demonstração
 INSERT INTO "Institution" ("id", "name", "slug", "apiBaseUrl", "active")
 VALUES
-    (gen_random_uuid()::text, 'DeasBank',    'deasbank',    '/api/open-finance/external-sim/deasbank',    true),
+    (gen_random_uuid()::text, 'DEASPay',    'deaspay',    'https://deas-pay.vercel.app',    true),
     (gen_random_uuid()::text, 'Banco Alpha', 'banco-alpha', '/api/open-finance/external-sim/banco-alpha', true),
     (gen_random_uuid()::text, 'Fintech Beta','fintech-beta','/api/open-finance/external-sim/fintech-beta',true)
 ON CONFLICT ("slug") DO NOTHING;
+
+-- Remove o antigo banco antigo da lista de bancos conectáveis.
+UPDATE "Institution" SET "active" = false WHERE "slug" = 'deasbank';
 
 -- Adiciona colunas novas em OpenFinanceConsent
 ALTER TABLE "OpenFinanceConsent"

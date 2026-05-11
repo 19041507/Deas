@@ -14,11 +14,13 @@
 import type { BankAdapter } from "./types";
 import { genericAdapter } from "./providers/generic";
 import { larabankAdapter } from "./providers/larabank";
+import { deaspayAdapter } from "./providers/deaspay";
 
 // Mapa: slug da instituição → adaptador específico
 // Bancos não listados aqui usam o adaptador genérico
 const adapters: Record<string, BankAdapter> = {
   "larabank": larabankAdapter,
+  "deaspay": deaspayAdapter,
 };
 
 /**

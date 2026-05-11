@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { tokenFromRequest } from "@/lib/auth";
 import { ok, fail, unauth } from "@/lib/http";
 import { LARABANK_AUTH_URL, getLarabankClientId } from "@/lib/open-finance/providers/larabank";
+import { DEASPAY_AUTH_URL, getDeaspayClientId } from "@/lib/open-finance/providers/deaspay";
 import crypto from "crypto";
 
 /** Slugs de instituições que usam OAuth2 real (não simulado) */
@@ -28,6 +29,11 @@ const REAL_OAUTH_INSTITUTIONS: Record<string, { authUrl: string; getClientId: ()
     authUrl:      LARABANK_AUTH_URL,
     getClientId:  getLarabankClientId,
     scopes:       "accounts balances transactions",
+  },
+  "deaspay": {
+    authUrl:      DEASPAY_AUTH_URL,
+    getClientId:  getDeaspayClientId,
+    scopes:       "accounts balances transactions score debts",
   },
 };
 
@@ -99,8 +105,7 @@ export async function POST(req: Request) {
 
     if (!clientId) {
       return fail(
-        "Client ID do Larabank não está configurado na Vercel do Deas Finance. " +
-        "Configure LARABANK_CLIENT_ID ou LARABANK_API_CLIENT_ID."
+        `Client ID do ${institution.name} não está configurado na Vercel do Deas Finance. Configure ${institution.slug.toUpperCase().replace(/-/g, "_")}_CLIENT_ID.`
       );
     }
 

@@ -231,7 +231,7 @@ export default function OpenFinancePage() {
               >
                 <option value="">Selecione…</option>
                 {institutions
-                  .filter((i) => i.canShareData && !activeInstitutionIds.has(i.id))
+                  .filter((i) => ["larabank", "deaspay"].includes(i.slug) && i.canShareData && !activeInstitutionIds.has(i.id))
                   .map((i) => (
                     <option key={i.id} value={i.id}>{i.name}</option>
                   ))}

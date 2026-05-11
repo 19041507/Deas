@@ -20,11 +20,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdapter } from "@/lib/open-finance/adapters";
 import { exchangeCodeForToken } from "@/lib/open-finance/providers/larabank";
+import { exchangeDeaspayCodeForToken } from "@/lib/open-finance/providers/deaspay";
 
 export const dynamic = "force-dynamic";
 
 /** Slugs que fazem troca de token real via OAuth2 */
-const REAL_TOKEN_EXCHANGE_SLUGS = new Set(["larabank"]);
+const REAL_TOKEN_EXCHANGE_SLUGS = new Set(["larabank", "deaspay"]);
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -66,7 +67,9 @@ export async function GET(req: Request) {
 
     if (REAL_TOKEN_EXCHANGE_SLUGS.has(consent.institution.slug)) {
       // Troca real de code por token via OAuth2
-      const tokens = await exchangeCodeForToken(code, redirectUri);
+      const tokens = consent.institution.slug === "deaspay"
+        ? await exchangeDeaspayCodeForToken(code, redirectUri)
+        : await exchangeCodeForToken(code, redirectUri);
       accessToken  = tokens.accessToken;
       refreshToken = tokens.refreshToken;
     } else {

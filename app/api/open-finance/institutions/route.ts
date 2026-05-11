@@ -13,38 +13,9 @@ export const dynamic = "force-dynamic";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://deas-three.vercel.app";
 const LARABANK_URL = process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app";
+const DEASPAY_URL = process.env.DEASPAY_API_BASE_URL ?? "https://deas-pay.vercel.app";
 
 const DEFAULT_INSTITUTIONS = [
-  {
-    id:                 "inst_deasbank_001",
-    name:               "DeasBank",
-    slug:               "deasbank",
-    apiBaseUrl:         `${APP_URL}/api/open-finance/external-sim/deasbank`,
-    active:             true,
-    canShareData:       true,
-    canReceiveData:     true,
-    canInitiatePayment: false,
-  },
-  {
-    id:                 "inst_alpha_001",
-    name:               "Banco Alpha",
-    slug:               "banco-alpha",
-    apiBaseUrl:         `${APP_URL}/api/open-finance/external-sim/banco-alpha`,
-    active:             true,
-    canShareData:       true,
-    canReceiveData:     true,
-    canInitiatePayment: false,
-  },
-  {
-    id:                 "inst_beta_001",
-    name:               "Fintech Beta",
-    slug:               "fintech-beta",
-    apiBaseUrl:         `${APP_URL}/api/open-finance/external-sim/fintech-beta`,
-    active:             true,
-    canShareData:       true,
-    canReceiveData:     false,
-    canInitiatePayment: true,
-  },
   {
     id:                 "inst_larabank_001",
     name:               "Larabank",
@@ -55,9 +26,25 @@ const DEFAULT_INSTITUTIONS = [
     canReceiveData:     true,
     canInitiatePayment: false,
   },
+  {
+    id:                 "inst_deaspay_001",
+    name:               "DEASPay",
+    slug:               "deaspay",
+    apiBaseUrl:         DEASPAY_URL,
+    active:             true,
+    canShareData:       true,
+    canReceiveData:     true,
+    canInitiatePayment: false,
+  },
 ];
 
 async function ensureInstitutions() {
+  // Deixa ativos apenas Larabank e DEASPay. Banco Alpha, Fintech Beta e DeasBank ficam ocultos.
+  await prisma.institution.updateMany({
+    where: { slug: { notIn: ["larabank", "deaspay"] } },
+    data: { active: false },
+  });
+
   for (const inst of DEFAULT_INSTITUTIONS) {
     await prisma.institution.upsert({
       where:  { slug: inst.slug },

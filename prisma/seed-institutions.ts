@@ -11,11 +11,10 @@ const prisma = new PrismaClient();
 
 const institutions = [
   {
-    name: "DeasBank",
-    slug: "deasbank",
-    // Em produção, seria a URL real da API do DeasBank separado
-    // Para simulação, aponta para rotas internas do próprio Deas Finance
-    apiBaseUrl: process.env.NEXT_PUBLIC_APP_URL + "/api/open-finance/external-sim/deasbank",
+    name: "DEASPay",
+    slug: "deaspay",
+    // URL base real da API do DEASPay — cadastrar também DEASPAY_CLIENT_ID e DEASPAY_CLIENT_SECRET
+    apiBaseUrl: process.env.DEASPAY_API_BASE_URL ?? "https://deas-pay.vercel.app",
     active: true,
     canShareData: true,
     canReceiveData: true,

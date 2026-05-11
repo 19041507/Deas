@@ -58,7 +58,7 @@ model Transaction {
 model Institution {
   id         String   @id @default(cuid())
   name       String
-  slug       String   @unique   // ex: "deasbank", "banco-alpha"
+  slug       String   @unique   // ex: "deaspay", "banco-alpha"
   apiBaseUrl String              // URL base da API do banco externo
   logoUrl    String?
   active     Boolean  @default(true)

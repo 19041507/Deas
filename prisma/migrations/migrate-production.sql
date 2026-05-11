@@ -92,15 +92,15 @@ CREATE TABLE IF NOT EXISTS "OpenFinanceSnapshot" (
 
 -- ── 5. SEED: Instituições de demonstração ────────────────────────────────────
 -- Substitua a parte de apiBaseUrl pelo domínio real do seu app na Vercel.
--- Exemplo: https://deas-finance.vercel.app/api/open-finance/external-sim/deasbank
+-- Exemplo: https://deas-pay.vercel.app
 
 INSERT INTO "Institution" ("id", "name", "slug", "apiBaseUrl", "active")
 VALUES
   (
-    'inst_deasbank_001',
-    'DeasBank',
-    'deasbank',
-    'https://larabankdigital2.vercel.app/api/open-finance/external-sim/deasbank',
+    'inst_deaspay_001',
+    'DEASPay',
+    'deaspay',
+    'https://deas-pay.vercel.app',
     true
   ),
   (
@@ -127,6 +127,9 @@ VALUES
 ON CONFLICT ("slug") DO UPDATE SET
   "apiBaseUrl" = EXCLUDED."apiBaseUrl",
   "active"     = true;
+
+-- Remove banco antigo da lista de bancos conectáveis.
+UPDATE "Institution" SET "active" = false WHERE "slug" = 'deasbank';
 
 -- ── 6. FK: Liga OpenFinanceConsent → Institution ──────────────────────────────
 -- Só adiciona a FK se a coluna institutionId já tiver dados válidos.
