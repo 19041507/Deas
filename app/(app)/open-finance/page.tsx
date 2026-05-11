@@ -148,7 +148,7 @@ export default function OpenFinancePage() {
       const d = await r.json();
       await load();
       await refreshAccount();
-      toast(d.message || "Sincronizado!", "success");
+      toast(d.message || "Sincronizado!", d.failed ? "warning" : "success");
     } finally {
       setSyncing(false);
     }

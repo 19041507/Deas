@@ -80,6 +80,18 @@ export async function POST(req: Request) {
 
   const succeeded = results.filter((r) => r.status === "fulfilled").length;
   const failed    = results.filter((r) => r.status === "rejected").length;
+  const errors = results
+    .map((r, index) => {
+      if (r.status === "fulfilled") return null;
+      const consent = consents[index];
+      const reason = r.reason;
+      return {
+        institutionName: consent?.institution?.name ?? "Banco desconhecido",
+        code: reason?.code ?? "UNKNOWN",
+        message: reason?.message ?? String(reason ?? "Erro desconhecido"),
+      };
+    })
+    .filter(Boolean);
 
   // Recalcula score com dados atualizados de todos os bancos
   await refreshScore(userId);
@@ -88,13 +100,14 @@ export async function POST(req: Request) {
     data: {
       userId,
       action: failed === 0 ? "OF_SYNC_SUCCESS" : "OF_SYNC_PARTIAL",
-      details: { succeeded, failed },
+      details: { succeeded, failed, errors },
     },
   });
 
   return ok({
     synced:  succeeded,
     failed,
+    errors,
     message: `${succeeded} banco(s) sincronizado(s)${failed ? `, ${failed} com erro` : ""}.`,
   });
 }

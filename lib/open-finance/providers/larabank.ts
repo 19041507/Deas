@@ -3,16 +3,13 @@
  *
  * Implementa OAuth2 real (Authorization Code Flow) com o Larabank.
  *
- * Endpoints OAuth esperados no Larabank (padrão Laravel Passport):
- *   GET  {LARABANK_API_BASE_URL}/open-finance/authorize  → autorização
- *   POST {LARABANK_API_BASE_URL}/api/open-finance/token      → troca de code por token
- *   GET  {LARABANK_API_BASE_URL}/api/open-finance/provider/accounts     → dados de conta (com Bearer token)
- *   DELETE {LARABANK_API_BASE_URL}/api/consents/:id → revogação de consentimento
+ * Endpoints OAuth esperados no Larabank:
+ *   GET  {LARABANK_API_BASE_URL}/open-finance/authorize
+ *   POST {LARABANK_API_BASE_URL}/api/open-finance/token
+ *   GET  {LARABANK_API_BASE_URL}/api/open-finance/provider/accounts
  *
- * Variáveis de ambiente necessárias:
- *   LARABANK_CLIENT_ID     — gerado pelo Larabank após cadastro das URLs OAuth
- *   LARABANK_CLIENT_SECRET — gerado pelo Larabank após cadastro das URLs OAuth
- *   LARABANK_API_BASE_URL  — URL base da API do Larabank (ex: https://larabankdigital2.vercel.app)
+ * Este adaptador também tenta rotas alternativas de dados para não quebrar
+ * quando o banco parceiro expõe /provider em vez de /provider/accounts.
  */
 
 import type { BankAdapter, OpenFinanceAccountData } from "../types";
@@ -23,11 +20,15 @@ const LARABANK_API_BASE_URL =
 const LARABANK_CLIENT_ID     = process.env.LARABANK_CLIENT_ID ?? "";
 const LARABANK_CLIENT_SECRET = process.env.LARABANK_CLIENT_SECRET ?? "";
 
+function cleanBaseUrl(url: string) {
+  return url.replace(/\/+$/, "");
+}
+
 /** URL de autorização OAuth do Larabank */
-export const LARABANK_AUTH_URL = `${LARABANK_API_BASE_URL}/open-finance/authorize`;
+export const LARABANK_AUTH_URL = `${cleanBaseUrl(LARABANK_API_BASE_URL)}/open-finance/authorize`;
 
 /** URL de troca de code por token do Larabank */
-export const LARABANK_TOKEN_URL = `${LARABANK_API_BASE_URL}/api/open-finance/token`;
+export const LARABANK_TOKEN_URL = `${cleanBaseUrl(LARABANK_API_BASE_URL)}/api/open-finance/token`;
 
 /**
  * Troca o authorization code por um access token no Larabank.
@@ -70,39 +71,155 @@ export async function exchangeCodeForToken(
   };
 }
 
+function toNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function unwrapAccountPayload(data: any) {
+  /**
+   * Aceita todos estes formatos:
+   * { account: {...} }
+   * { data: { account: {...} } }
+   * { data: {...} }
+   * { ok: true, account: {...} }
+   * {...camposDaConta}
+   */
+  return data?.account ?? data?.data?.account ?? data?.data ?? data;
+}
+
+function normalizeAccountData(data: any): OpenFinanceAccountData {
+  const acct = unwrapAccountPayload(data);
+
+  return {
+    availableBalance: toNumber(
+      acct?.availableBalance,
+      acct?.available_balance,
+      acct?.saldoDisponivel,
+      acct?.saldo_disponivel,
+      acct?.saldo,
+      acct?.balance
+    ),
+    debt: toNumber(
+      acct?.debt,
+      acct?.divida,
+      acct?.dividas,
+      acct?.debts,
+      acct?.totalDebt,
+      acct?.total_debt
+    ),
+    limit: toNumber(
+      acct?.limit,
+      acct?.limite,
+      acct?.creditLimit,
+      acct?.credit_limit,
+      acct?.limiteCredito,
+      acct?.limite_credito
+    ),
+    loans: toNumber(
+      acct?.loans,
+      acct?.emprestimos,
+      acct?.loanTotal,
+      acct?.loan_total,
+      acct?.loansTotal,
+      acct?.loans_total
+    ),
+    investments: toNumber(
+      acct?.investments,
+      acct?.investimentos,
+      acct?.investmentTotal,
+      acct?.investment_total
+    ),
+    estimatedIncome: toNumber(
+      acct?.estimatedIncome,
+      acct?.estimated_income,
+      acct?.rendaEstimada,
+      acct?.renda_estimada,
+      acct?.income,
+      acct?.renda
+    ),
+    externalScore: toNumber(
+      acct?.creditScore,
+      acct?.credit_score,
+      acct?.externalScore,
+      acct?.external_score,
+      acct?.score
+    ),
+  };
+}
+
+async function fetchJsonWithBearer(url: string, accessToken: string) {
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept:        "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const text = await res.text().catch(() => "");
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  return { res, text, json };
+}
+
 /** Adaptador de dados do Larabank (implementa BankAdapter) */
 export const larabankAdapter: BankAdapter = {
   async fetchAccountData(
     accessToken: string,
     apiBaseUrl: string
   ): Promise<OpenFinanceAccountData> {
-    const res = await fetch(`${apiBaseUrl}/api/open-finance/provider/accounts`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept:        "application/json",
-      },
-    });
+    const base = cleanBaseUrl(apiBaseUrl || LARABANK_API_BASE_URL);
 
-    if (!res.ok) {
-      const status = res.status;
-      if (status === 401) throw { code: "TOKEN_EXPIRED",      message: "Token do Larabank expirado ou inválido." };
-      if (status === 403) throw { code: "CONSENT_REVOKED",    message: "Consentimento revogado no Larabank." };
-      if (status === 503) throw { code: "BANK_UNAVAILABLE",   message: "Larabank temporariamente indisponível." };
-      throw { code: "UNKNOWN", message: `Erro ${status} ao buscar dados do Larabank.` };
+    const candidateUrls = [
+      `${base}/api/open-finance/provider/accounts`,
+      `${base}/api/open-finance/provider`,
+      `${base}/api/open-finance/accounts`,
+      `${base}/api/account`,
+    ];
+
+    let lastError = "";
+
+    for (const url of candidateUrls) {
+      const { res, text, json } = await fetchJsonWithBearer(url, accessToken);
+
+      if (res.ok) {
+        return normalizeAccountData(json);
+      }
+
+      const bodyMsg = json?.message ?? json?.error ?? text;
+      lastError = `${res.status} em ${url}${bodyMsg ? ` - ${String(bodyMsg).slice(0, 300)}` : ""}`;
+
+      // 404/405 significa rota incompatível: tenta a próxima rota conhecida.
+      if (res.status === 404 || res.status === 405) continue;
+
+      if (res.status === 401) {
+        throw { code: "TOKEN_EXPIRED", message: `Token do Larabank expirado ou inválido. Detalhe: ${lastError}` };
+      }
+      if (res.status === 403) {
+        throw { code: "CONSENT_REVOKED", message: `Consentimento revogado no Larabank. Detalhe: ${lastError}` };
+      }
+      if (res.status === 503) {
+        throw { code: "BANK_UNAVAILABLE", message: `Larabank temporariamente indisponível. Detalhe: ${lastError}` };
+      }
+
+      throw { code: "UNKNOWN", message: `Erro ao buscar dados do Larabank: ${lastError}` };
     }
 
-    const data = await res.json();
-    // Suporte a diferentes formatos de resposta do Larabank
-    const acct = data.account ?? data.data ?? data;
-
-    return {
-      availableBalance: Number(acct.availableBalance ?? acct.available_balance ?? acct.saldo_disponivel ?? acct.balance ?? 0),
-      debt:             Number(acct.debt             ?? acct.divida              ?? acct.debts           ?? 0),
-      limit:            Number(acct.limit            ?? acct.limite              ?? acct.credit_limit     ?? 0),
-      loans:            Number(acct.loans            ?? acct.emprestimos         ?? acct.loan_total       ?? 0),
-      investments:      Number(acct.investments      ?? acct.investimentos       ?? acct.investment_total ?? 0),
-      estimatedIncome:  Number(acct.estimatedIncome  ?? acct.renda_estimada      ?? acct.estimated_income ?? 0),
-      externalScore:    Number(acct.creditScore      ?? acct.externalScore       ?? acct.credit_score     ?? acct.score ?? 0),
+    throw {
+      code: "UNKNOWN",
+      message:
+        `Nenhuma rota de dados do Larabank respondeu corretamente. Última tentativa: ${lastError}. ` +
+        `Confirme se o Larabank possui GET /api/open-finance/provider/accounts ou GET /api/open-finance/provider.`,
     };
   },
 
@@ -112,7 +229,8 @@ export const larabankAdapter: BankAdapter = {
     consentId: string
   ): Promise<void> {
     try {
-      await fetch(`${apiBaseUrl}/api/consents/${consentId}`, {
+      const base = cleanBaseUrl(apiBaseUrl || LARABANK_API_BASE_URL);
+      await fetch(`${base}/api/consents/${consentId}`, {
         method:  "DELETE",
         headers: {
           Authorization: `Bearer ${accessToken}`,
