@@ -1,38 +1,33 @@
 /**
  * Simulação de API de banco externo — apenas para demonstração.
- * Rota: GET /api/open-finance/external-sim/[bankSlug]/...
- *       DELETE /api/open-finance/external-sim/[bankSlug]/...
+ *
+ * Importante no Next.js App Router:
+ * - /api/open-finance/external-sim/[bankSlug] cai neste arquivo.
+ * - /api/open-finance/external-sim/[bankSlug]/accounts NÃO cai aqui.
+ * - /api/open-finance/external-sim/[bankSlug]/consents/[consentId] NÃO cai aqui.
+ *
+ * Por isso as rotas aninhadas ficam em:
+ * - [bankSlug]/accounts/route.ts
+ * - [bankSlug]/consents/[consentId]/route.ts
  */
 
 import { NextResponse } from "next/server";
-import { handleGetAccounts, handleRevokeConsent } from "@/lib/open-finance/bank-simulator";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ bankSlug: string }> }
-) {
-  const { bankSlug } = await params;
-  const url = new URL(request.url);
-
-  if (url.pathname.endsWith("/accounts")) {
-    return handleGetAccounts(request, bankSlug);
-  }
-
-  return NextResponse.json({ error: "Rota não encontrada." }, { status: 404 });
+export async function GET() {
+  return NextResponse.json(
+    {
+      ok: true,
+      message: "Banco simulado encontrado. Use /accounts para consultar dados da conta.",
+    },
+    { status: 200 }
+  );
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ bankSlug: string }> }
-) {
-  await params; // Next.js 15 exige await mesmo sem usar o valor
-  const url = new URL(request.url);
-
-  if (url.pathname.includes("/consents/")) {
-    return handleRevokeConsent();
-  }
-
-  return NextResponse.json({ error: "Rota não encontrada." }, { status: 404 });
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Rota não encontrada. Use /consents/[consentId] para revogar." },
+    { status: 404 }
+  );
 }

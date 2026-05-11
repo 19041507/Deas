@@ -19,14 +19,14 @@
 import { prisma } from "@/lib/prisma";
 import { tokenFromRequest } from "@/lib/auth";
 import { ok, fail, unauth } from "@/lib/http";
-import { LARABANK_AUTH_URL } from "@/lib/open-finance/providers/larabank";
+import { LARABANK_AUTH_URL, getLarabankClientId } from "@/lib/open-finance/providers/larabank";
 import crypto from "crypto";
 
 /** Slugs de instituições que usam OAuth2 real (não simulado) */
-const REAL_OAUTH_INSTITUTIONS: Record<string, { authUrl: string; clientIdEnv: string; scopes: string }> = {
+const REAL_OAUTH_INSTITUTIONS: Record<string, { authUrl: string; getClientId: () => string; scopes: string }> = {
   "larabank": {
     authUrl:      LARABANK_AUTH_URL,
-    clientIdEnv:  "LARABANK_CLIENT_ID",
+    getClientId:  getLarabankClientId,
     scopes:       "accounts balances transactions",
   },
 };
@@ -95,10 +95,13 @@ export async function POST(req: Request) {
 
   if (realOAuth) {
     // OAuth2 real — redireciona para autenticação no banco externo
-    const clientId = process.env[realOAuth.clientIdEnv] ?? "";
+    const clientId = realOAuth.getClientId();
 
     if (!clientId) {
-      return fail(`LARABANK_CLIENT_ID não está configurado na Vercel do Deas Finance.`);
+      return fail(
+        "Client ID do Larabank não está configurado na Vercel do Deas Finance. " +
+        "Configure LARABANK_CLIENT_ID ou LARABANK_API_CLIENT_ID."
+      );
     }
 
     const params = new URLSearchParams({

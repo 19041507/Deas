@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getLarabankClientId, getLarabankClientSecret } from "@/lib/open-finance/providers/larabank";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +9,8 @@ function cleanBaseUrl(url: string) {
 
 export async function GET() {
   const base = cleanBaseUrl(process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app");
-  const clientId = process.env.LARABANK_CLIENT_ID ?? "";
-  const secret =
-    process.env.LARABANK_CLIENT_SECRET ??
-    process.env.LARABANK_API_SECRET ??
-    process.env.LARABANK_API_CLIENT_SECRET ??
-    process.env.LARABANK_OAUTH_CLIENT_SECRET ??
-    process.env.API_SECRET ??
-    "";
+  const clientId = getLarabankClientId();
+  const secret = getLarabankClientSecret();
 
   return NextResponse.json({
     ok: true,

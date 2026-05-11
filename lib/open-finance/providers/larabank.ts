@@ -15,19 +15,30 @@ import type { BankAdapter, OpenFinanceAccountData } from "../types";
 const LARABANK_API_BASE_URL =
   process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app";
 
-const LARABANK_CLIENT_ID =
-  process.env.LARABANK_CLIENT_ID ??
-  process.env.LARABANK_API_CLIENT_ID ??
-  process.env.LARABANK_OAUTH_CLIENT_ID ??
-  "";
+export function getLarabankClientId() {
+  return (
+    process.env.LARABANK_CLIENT_ID ??
+    process.env.LARABANK_API_CLIENT_ID ??
+    process.env.LARABANK_OAUTH_CLIENT_ID ??
+    process.env.DEAS_CLIENT_ID ??
+    ""
+  );
+}
 
-const LARABANK_CLIENT_SECRET =
-  process.env.LARABANK_CLIENT_SECRET ??
-  process.env.LARABANK_API_SECRET ??
-  process.env.LARABANK_API_CLIENT_SECRET ??
-  process.env.LARABANK_OAUTH_CLIENT_SECRET ??
-  process.env.API_SECRET ??
-  "";
+export function getLarabankClientSecret() {
+  return (
+    process.env.LARABANK_CLIENT_SECRET ??
+    process.env.LARABANK_API_SECRET ??
+    process.env.LARABANK_API_CLIENT_SECRET ??
+    process.env.LARABANK_OAUTH_CLIENT_SECRET ??
+    process.env.DEAS_CLIENT_SECRET ??
+    process.env.API_SECRET ??
+    ""
+  );
+}
+
+const LARABANK_CLIENT_ID = getLarabankClientId();
+const LARABANK_CLIENT_SECRET = getLarabankClientSecret();
 
 function cleanBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
