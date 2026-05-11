@@ -32,7 +32,7 @@ export function getDeaspayClientSecret() {
 }
 
 function cleanBaseUrl(url: string) {
-  return url.replace(/\/+$/, "");
+  return String(url || DEASPAY_API_BASE_URL).replace(/\/+$/, "");
 }
 
 const DEASPAY_BASE = cleanBaseUrl(DEASPAY_API_BASE_URL);
@@ -40,21 +40,29 @@ const DEASPAY_BASE = cleanBaseUrl(DEASPAY_API_BASE_URL);
 export const DEASPAY_AUTH_URL =
   process.env.DEASPAY_AUTH_URL ?? `${DEASPAY_BASE}/api/oauth/authorize`;
 
+function unique(values: Array<string | undefined | null>) {
+  return Array.from(new Set(values.filter(Boolean).map((v) => String(v))));
+}
+
 function getDeaspayTokenUrls() {
-  return [
+  return unique([
     process.env.DEASPAY_TOKEN_URL,
     `${DEASPAY_BASE}/api/oauth/token`,
     `${DEASPAY_BASE}/token`,
-  ].filter(Boolean) as string[];
+  ]);
 }
 
 function getDeaspayAccountUrls(apiBaseUrl: string) {
   const base = cleanBaseUrl(apiBaseUrl || DEASPAY_API_BASE_URL);
-  return [
+  const envBase = cleanBaseUrl(DEASPAY_API_BASE_URL);
+
+  return unique([
     process.env.DEASPAY_ACCOUNTS_URL,
     `${base}/api/provider/accounts`,
     `${base}/provider/accounts`,
-  ].filter(Boolean) as string[];
+    `${envBase}/api/provider/accounts`,
+    `${envBase}/provider/accounts`,
+  ]);
 }
 
 function pickAccessToken(data: any) {
@@ -88,12 +96,7 @@ async function postTokenRequest(url: string, payload: Record<string, string>, mo
 
   const text = await res.text().catch(() => "");
   let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
-
+  try { json = text ? JSON.parse(text) : null; } catch { json = null; }
   return { res, text, json };
 }
 
@@ -112,20 +115,10 @@ export async function exchangeDeaspayCodeForToken(
   }
 
   const payloads = [
-    compactPayload({
-      grant_type: "authorization_code",
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      code,
-    }),
-    compactPayload({
-      grantType: "authorization_code",
-      clientId,
-      clientSecret,
-      redirectUri,
-      code,
-    }),
+    compactPayload({ grant_type: "authorization_code", client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, code }),
+    compactPayload({ grantType: "authorization_code", clientId, clientSecret, redirectUri, code }),
+    // fallback tolerante para versões antigas do DEASPay
+    compactPayload({ client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, code }),
   ];
 
   let lastError = "";
@@ -144,11 +137,7 @@ export async function exchangeDeaspayCodeForToken(
             lastError = `${res.status} em ${tokenUrl} (${mode}) - resposta sem access_token`;
             continue;
           }
-          return {
-            accessToken,
-            refreshToken: pickRefreshToken(json),
-            expiresIn: pickExpiresIn(json),
-          };
+          return { accessToken, refreshToken: pickRefreshToken(json), expiresIn: pickExpiresIn(json) };
         }
 
         lastError = `${res.status} em ${tokenUrl} (${mode})${bodyMsg ? ` - ${String(bodyMsg).slice(0, 300)}` : ""}`;
@@ -166,81 +155,135 @@ export async function exchangeDeaspayCodeForToken(
 function toNumber(...values: unknown[]) {
   for (const value of values) {
     if (value === null || value === undefined || value === "") continue;
+    if (typeof value === "string") {
+      const normalized = value.replace(/R\$|\s/g, "").replace(/\./g, "").replace(",", ".");
+      const parsed = Number(normalized);
+      if (Number.isFinite(parsed)) return parsed;
+      continue;
+    }
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
 }
 
-function normalizeDeaspayData(data: any): OpenFinanceAccountData {
+function sumArray(items: any[], ...keys: string[]) {
+  return items.reduce((sum, item) => {
+    for (const key of keys) {
+      const value = item?.[key];
+      if (value !== null && value !== undefined && value !== "") return sum + toNumber(value);
+    }
+    return sum;
+  }, 0);
+}
+
+function normalizeDeaspayData(raw: any): OpenFinanceAccountData {
+  const data = raw?.data ?? raw;
   const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
-  const summary = data?.summary ?? {};
-  const firstAccount = accounts[0] ?? data?.account ?? data?.data?.account ?? data?.data ?? data;
-  const score = data?.score ?? data?.creditScore ?? data?.externalScore ?? firstAccount?.score;
+  const debts = Array.isArray(data?.debts)
+    ? data.debts
+    : Array.isArray(data?.inadimplencias)
+      ? data.inadimplencias
+      : [];
+  const summary = data?.summary ?? data?.totals ?? {};
+  const firstAccount = accounts[0] ?? data?.account ?? data?.conta ?? data;
+  const score = data?.score ?? data?.creditScoreData ?? data?.scoreData ?? firstAccount?.score;
+
+  const totalAvailableFromAccounts = sumArray(
+    accounts,
+    "availableBalance", "balanceAvailable", "saldoDisponivel", "available", "balance"
+  );
+  const totalLimitFromAccounts = sumArray(
+    accounts,
+    "creditLimit", "limit", "limite", "credit_available", "creditAvailable"
+  );
+  const totalDebtFromDebts = debts
+    .filter((debt: any) => !["paid", "pago", "quitado"].includes(String(debt?.status || "").toLowerCase()))
+    .reduce((sum: number, debt: any) => sum + toNumber(debt?.currentAmount, debt?.current_amount, debt?.amount, debt?.valorAtual, debt?.valor), 0);
+
+  const availableBalance = toNumber(
+    data?.availableBalance,
+    data?.externalBalance,
+    data?.saldoDisponivel,
+    data?.saldo_disponivel,
+    summary?.totalAvailableBalance,
+    summary?.availableBalance,
+    summary?.saldoDisponivel,
+    firstAccount?.availableBalance,
+    firstAccount?.balanceAvailable,
+    firstAccount?.saldoDisponivel,
+    firstAccount?.available,
+    totalAvailableFromAccounts
+  );
+
+  const debt = toNumber(
+    data?.debt,
+    data?.externalDebt,
+    data?.totalDebt,
+    data?.divida,
+    summary?.totalDebtAmount,
+    summary?.totalDebt,
+    summary?.debt,
+    totalDebtFromDebts
+  );
+
+  const limit = toNumber(
+    data?.limit,
+    data?.externalLimit,
+    data?.creditLimit,
+    data?.limite,
+    summary?.totalCreditLimit,
+    summary?.creditLimit,
+    firstAccount?.creditLimit,
+    firstAccount?.limit,
+    firstAccount?.limite,
+    totalLimitFromAccounts
+  );
+
+  const estimatedIncome = toNumber(
+    data?.estimatedIncome,
+    data?.income,
+    data?.rendaEstimada,
+    data?.renda_estimada,
+    data?.user?.estimatedIncome,
+    data?.user?.monthly_income,
+    data?.user?.monthlyIncome,
+    summary?.estimatedIncome,
+    summary?.income
+  );
+
+  const externalScore = toNumber(
+    data?.externalScore,
+    data?.creditScore,
+    data?.scoreValue,
+    summary?.externalScore,
+    summary?.creditScore,
+    score?.score,
+    score?.value,
+    score?.currentScore,
+    score
+  );
 
   return {
-    availableBalance: toNumber(
-      data?.availableBalance,
-      data?.saldoDisponivel,
-      summary.totalAvailableBalance,
-      firstAccount?.availableBalance,
-      firstAccount?.balance,
-      data?.availableBalance,
-      data?.saldoDisponivel
-    ),
-    debt: toNumber(
-      data?.debt,
-      data?.totalDebt,
-      summary.totalDebtAmount,
-      data?.totalDebt,
-      data?.divida
-    ),
-    limit: toNumber(
-      data?.limit,
-      data?.creditLimit,
-      summary.totalCreditLimit,
-      firstAccount?.creditLimit,
-      firstAccount?.limit,
-      data?.limit
-    ),
-    loans: toNumber(data?.loans, data?.loanTotal, 0),
-    investments: toNumber(data?.investments, data?.investmentTotal, 0),
-    estimatedIncome: toNumber(
-      data?.estimatedIncome,
-      data?.income,
-      data?.user?.estimatedIncome,
-      summary.estimatedIncome,
-      0
-    ),
-    externalScore: toNumber(
-      data?.externalScore,
-      data?.creditScore,
-      summary.externalScore,
-      score?.score,
-      score?.value,
-      score?.currentScore,
-      score,
-      0
-    ),
+    availableBalance,
+    debt,
+    limit,
+    loans: toNumber(data?.loans, data?.loanTotal, summary?.loans, 0),
+    investments: toNumber(data?.investments, data?.investmentTotal, summary?.investments, 0),
+    estimatedIncome,
+    externalScore,
   };
 }
 
 async function fetchJsonWithBearer(url: string, accessToken: string) {
   const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     cache: "no-store",
   });
 
   const text = await res.text().catch(() => "");
   let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
+  try { json = text ? JSON.parse(text) : null; } catch { json = null; }
   return { res, text, json };
 }
 

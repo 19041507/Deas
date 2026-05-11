@@ -88,8 +88,8 @@ export default function OpenFinancePage() {
   const load = useCallback(async () => {
     try {
       const [cr, ir] = await Promise.all([
-        fetch("/api/open-finance"),
-        fetch("/api/open-finance/institutions"),
+        fetch("/api/open-finance", { cache: "no-store" }),
+        fetch("/api/open-finance/institutions", { cache: "no-store" }),
       ]);
       const [cd, id] = await Promise.all([cr.json(), ir.json()]);
       setConsents(Array.isArray(cd) ? cd : []);
@@ -151,7 +151,7 @@ export default function OpenFinancePage() {
   async function sync() {
     setSyncing(true);
     try {
-      const r = await fetch("/api/open-finance/sync", { method: "POST" });
+      const r = await fetch("/api/open-finance/sync", { method: "POST", cache: "no-store" });
       const d = await r.json();
       await load();
       await refreshAccount();
