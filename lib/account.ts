@@ -11,8 +11,10 @@ export function calcScore(params: {
   score += Math.min(130, income / 90);
   score -= Math.min(180, debt / 45);
   score -= Math.min(80, loans / 100);
-  // Média ponderada: 72% score local, 28% média dos scores externos
-  if (partnerScoreAverage) score = score * 0.72 + partnerScoreAverage * 0.28;
+  // Open Finance real: o score do banco conectado influencia para cima ou para baixo.
+  // 60% vem do Deas Finance e 40% da média dos scores externos conectados.
+  // Ex.: score externo alto melhora; score externo baixo derruba.
+  if (partnerScoreAverage !== undefined) score = score * 0.60 + partnerScoreAverage * 0.40;
   return Math.max(300, Math.min(950, Math.round(score)));
 }
 
@@ -62,7 +64,7 @@ export async function refreshScore(userId: string) {
     if (!snap) continue;
     totalExternalIncome += Number(snap.estimatedIncome ?? 0);
     totalExternalDebt   += Number(snap.debt ?? 0);
-    if (snap.externalScore) externalScores.push(snap.externalScore);
+    if (snap.externalScore !== null && snap.externalScore !== undefined && snap.externalScore > 0) externalScores.push(snap.externalScore);
   }
 
   // Média dos scores externos (se houver)
@@ -83,7 +85,7 @@ export async function refreshScore(userId: string) {
   const preApproved = calcPreApproved(
     score,
     Number(account.estimatedIncome) + totalExternalIncome,
-    Number(account.debt)
+    Number(account.debt) + totalExternalDebt
   );
 
   await prisma.account.update({

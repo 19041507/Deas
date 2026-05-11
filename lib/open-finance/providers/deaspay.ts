@@ -180,6 +180,8 @@ function normalizeDeaspayData(data: any): OpenFinanceAccountData {
 
   return {
     availableBalance: toNumber(
+      data?.availableBalance,
+      data?.saldoDisponivel,
       summary.totalAvailableBalance,
       firstAccount?.availableBalance,
       firstAccount?.balance,
@@ -187,12 +189,15 @@ function normalizeDeaspayData(data: any): OpenFinanceAccountData {
       data?.saldoDisponivel
     ),
     debt: toNumber(
-      summary.totalDebtAmount,
       data?.debt,
+      data?.totalDebt,
+      summary.totalDebtAmount,
       data?.totalDebt,
       data?.divida
     ),
     limit: toNumber(
+      data?.limit,
+      data?.creditLimit,
       summary.totalCreditLimit,
       firstAccount?.creditLimit,
       firstAccount?.limit,
@@ -200,8 +205,17 @@ function normalizeDeaspayData(data: any): OpenFinanceAccountData {
     ),
     loans: toNumber(data?.loans, data?.loanTotal, 0),
     investments: toNumber(data?.investments, data?.investmentTotal, 0),
-    estimatedIncome: toNumber(data?.estimatedIncome, data?.income, 0),
+    estimatedIncome: toNumber(
+      data?.estimatedIncome,
+      data?.income,
+      data?.user?.estimatedIncome,
+      summary.estimatedIncome,
+      0
+    ),
     externalScore: toNumber(
+      data?.externalScore,
+      data?.creditScore,
+      summary.externalScore,
       score?.score,
       score?.value,
       score?.currentScore,
