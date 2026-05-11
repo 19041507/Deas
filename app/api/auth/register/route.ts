@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureUserColumns } from "@/lib/ensure-user-columns";
 import { hashPassword, createToken, setCookieHeader } from "@/lib/auth";
 import { seedValues } from "@/lib/account";
 import { isValidCpf, sanitizeCpf } from "@/lib/cpf";
@@ -36,6 +37,8 @@ export async function POST(req: Request) {
       return fail("CPF inválido. Verifique os dígitos informados.");
 
     const cpfDigits = sanitizeCpf(cleanCpf); // salva apenas dígitos
+
+    await ensureUserColumns();
 
     // ── Unicidade ──────────────────────────────────────────────────────────
     const [existingEmail, existingCpf] = await Promise.all([

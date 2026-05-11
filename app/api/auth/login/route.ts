@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureUserColumns } from "@/lib/ensure-user-columns";
 import { comparePassword, createToken, setCookieHeader } from "@/lib/auth";
 import { fail } from "@/lib/http";
 import { NextResponse } from "next/server";
@@ -9,6 +10,7 @@ export async function POST(req: Request) {
     const { email, password } = await req.json();
     const cleanEmail = String(email || "").trim().toLowerCase();
     if (!cleanEmail || !password) return fail("Informe e-mail e senha.");
+    await ensureUserColumns();
     const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user || !(await comparePassword(password, user.passwordHash))) return fail("E-mail ou senha incorretos.");
     await prisma.auditLog.create({ data: { userId: user.id, action: "LOGIN" } });

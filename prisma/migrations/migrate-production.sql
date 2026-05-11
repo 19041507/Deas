@@ -15,6 +15,9 @@
 -- ── 1. TABELA USER — adiciona CPF ────────────────────────────────────────────
 
 ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "photoUrl" TEXT;
+
+ALTER TABLE "User"
   ADD COLUMN IF NOT EXISTS "cpf" TEXT;
 
 -- Índice único (ignora NULLs, então usuários sem CPF não conflitam)

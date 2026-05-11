@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureUserColumns } from "@/lib/ensure-user-columns";
 import { tokenFromRequest } from "@/lib/auth";
 import { ok, unauth } from "@/lib/http";
 export const dynamic = "force-dynamic";
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const userId = tokenFromRequest(req);
   if (!userId) return unauth();
+  await ensureUserColumns();
   const user = await prisma.user.findUnique({ where: { id: userId }, include: { account: true } });
   if (!user?.account) return unauth();
   const a = user.account;
