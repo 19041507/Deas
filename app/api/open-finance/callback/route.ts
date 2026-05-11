@@ -89,41 +89,61 @@ export async function GET(req: Request) {
       },
     });
 
-    // Sincroniza dados imediatamente após ativação
-    const adapter = getAdapter(consent.institution.slug);
-    const data = await adapter.fetchAccountData(accessToken, consent.institution.apiBaseUrl);
+    /**
+     * A conexão OAuth já deu certo neste ponto.
+     * A primeira sincronização pode falhar por rota/formato diferente no banco parceiro,
+     * mas isso não deve transformar a conexão inteira em erro.
+     */
+    let syncOk = false;
+    let syncError: string | null = null;
 
-    await prisma.openFinanceSnapshot.create({
-      data: {
-        consentId:        consent.id,
-        availableBalance: data.availableBalance,
-        debt:             data.debt,
-        limit:            data.limit,
-        loans:            data.loans,
-        investments:      data.investments,
-        estimatedIncome:  data.estimatedIncome,
-        externalScore:    data.externalScore,
-      },
-    });
+    try {
+      const adapter = getAdapter(consent.institution.slug);
+      const data = await adapter.fetchAccountData(accessToken, consent.institution.apiBaseUrl);
+
+      await prisma.openFinanceSnapshot.create({
+        data: {
+          consentId:        consent.id,
+          availableBalance: data.availableBalance,
+          debt:             data.debt,
+          limit:            data.limit,
+          loans:            data.loans,
+          investments:      data.investments,
+          estimatedIncome:  data.estimatedIncome,
+          externalScore:    data.externalScore,
+        },
+      });
+
+      syncOk = true;
+    } catch (syncErr: any) {
+      syncError = syncErr?.message ?? "Falha ao sincronizar dados do banco parceiro.";
+      console.error("[OF Callback] Conexão aprovada, mas sync inicial falhou:", syncErr);
+    }
 
     await prisma.auditLog.create({
       data: {
         userId:  consent.userId,
-        action:  "OF_CONSENT_APPROVED",
+        action:  syncOk ? "OF_CONSENT_APPROVED" : "OF_CONSENT_APPROVED_SYNC_FAILED",
         details: {
           consentId:     consent.id,
           institutionId: consent.institutionId,
           institutionName: consent.institution.name,
-          status: "success",
+          status: syncOk ? "success" : "sync_failed",
+          syncError,
         },
       },
     });
 
-    // Recalcula score considerando todos os bancos conectados
+    // Recalcula score considerando todos os bancos conectados.
+    // Se o sync falhou, ainda assim mantém a conexão ativa para o usuário reconectar/sincronizar depois.
     const { refreshScore } = await import("@/lib/account");
     await refreshScore(consent.userId);
 
-    return NextResponse.redirect(`${redirectBase}?success=conectado`);
+    return NextResponse.redirect(
+      syncOk
+        ? `${redirectBase}?success=conectado`
+        : `${redirectBase}?success=conectado&sync_error=1`
+    );
   } catch (err: any) {
     console.error("[OF Callback] Erro:", err);
 
