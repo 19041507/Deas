@@ -1,13 +1,12 @@
-import { POST as oauthTokenPost, OPTIONS as oauthTokenOptions } from "../../oauth/token/route";
-
-export const dynamic = "force-dynamic";
-
-// Rota de compatibilidade para bancos parceiros que chamam o padrão:
-// POST /api/open-finance/token
-export async function POST(req: Request) {
-  return oauthTokenPost(req);
-}
+export { GET, POST } from "../../oauth/token/route";
 
 export async function OPTIONS() {
-  return oauthTokenOptions();
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }

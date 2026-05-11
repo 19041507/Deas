@@ -3,11 +3,6 @@
  *
  * Endpoint de token OAuth do Deas Finance.
  * Troca o authorization code por um access token.
- *
- * Ajustes:
- * - aceita JSON e application/x-www-form-urlencoded;
- * - evita filtro Prisma JSON path, que pode quebrar em alguns Postgres/Prisma;
- * - retorna erro em JSON com log no Vercel em vez de derrubar a rota sem explicação.
  */
 
 import { NextResponse } from "next/server";
@@ -27,17 +22,16 @@ type TokenBody = {
   redirect_uri?: string;
 };
 
-async function readBody(req: Request): Promise<TokenBody> {
-  const contentType = req.headers.get("content-type") || "";
+async function readTokenBody(req: Request): Promise<TokenBody> {
+  const contentType = req.headers.get("content-type") ?? "";
 
-  if (contentType.includes("application/x-www-form-urlencoded")) {
-    const text = await req.text();
-    const params = new URLSearchParams(text);
-    return Object.fromEntries(params.entries());
+  if (contentType.includes("application/json")) {
+    return await req.json().catch(() => ({}));
   }
 
-  if (contentType.includes("multipart/form-data")) {
-    const form = await req.formData();
+  if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    const form = await req.formData().catch(() => null);
+    if (!form) return {};
     return {
       grant_type: String(form.get("grant_type") ?? ""),
       client_id: String(form.get("client_id") ?? ""),
@@ -47,53 +41,64 @@ async function readBody(req: Request): Promise<TokenBody> {
     };
   }
 
-  return await req.json().catch(() => ({}));
+  // Fallback: alguns clientes enviam texto urlencoded sem content-type correto.
+  const raw = await req.text().catch(() => "");
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const params = new URLSearchParams(raw);
+    return {
+      grant_type: params.get("grant_type") ?? undefined,
+      client_id: params.get("client_id") ?? undefined,
+      client_secret: params.get("client_secret") ?? undefined,
+      code: params.get("code") ?? undefined,
+      redirect_uri: params.get("redirect_uri") ?? undefined,
+    };
+  }
 }
 
-function jsonError(message: string, status = 400, extra?: Record<string, unknown>) {
-  return NextResponse.json({ error: message, ...extra }, { status });
+export async function GET() {
+  return NextResponse.json({ ok: true, route: "/api/oauth/token", method: "POST" });
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await readBody(req);
-    const grantType = String(body.grant_type ?? "");
-    const clientId = String(body.client_id ?? "");
-    const clientSecret = String(body.client_secret ?? "");
-    const code = String(body.code ?? "");
-    const redirectUri = String(body.redirect_uri ?? "");
+    const body = await readTokenBody(req);
+    const { grant_type, client_id, client_secret, code, redirect_uri } = body;
 
-    if (grantType !== "authorization_code") {
-      return jsonError("grant_type inválido.", 400);
+    if (grant_type !== "authorization_code") {
+      return NextResponse.json({ error: "grant_type inválido." }, { status: 400 });
     }
 
-    if (clientId !== DEAS_CLIENT_ID || clientSecret !== DEAS_CLIENT_SECRET) {
-      return jsonError("Credenciais inválidas.", 401);
+    if (client_id !== DEAS_CLIENT_ID || client_secret !== DEAS_CLIENT_SECRET) {
+      return NextResponse.json({ error: "Credenciais inválidas." }, { status: 401 });
     }
 
     if (!code) {
-      return jsonError("code obrigatório.", 400);
+      return NextResponse.json({ error: "code obrigatório." }, { status: 400 });
     }
 
-    if (!redirectUri) {
-      return jsonError("redirect_uri obrigatório.", 400);
+    if (!redirect_uri) {
+      return NextResponse.json({ error: "redirect_uri obrigatório." }, { status: 400 });
     }
 
-    // Busca os codes recentes sem usar JSON path no banco.
-    // Isso evita erro 500 em deploys onde o Prisma/Postgres não aceita esse filtro.
-    const pendingLogs = await prisma.auditLog.findMany({
+    // Evita query JSON avançada que pode quebrar dependendo da versão do Prisma/Postgres.
+    // Buscamos os códigos recentes e filtramos em JS para impedir erro 500 no Vercel.
+    const logs = await prisma.auditLog.findMany({
       where: { action: "OAUTH_CODE_PENDING" },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 50,
     });
 
-    const log = pendingLogs.find((item) => {
-      const details = item.details as any;
+    const log = logs.find((item) => {
+      const details = item.details as { code?: string } | null;
       return details?.code === code;
     });
 
     if (!log || !log.details) {
-      return jsonError("Code inválido ou expirado.", 401);
+      return NextResponse.json({ error: "Code inválido ou expirado." }, { status: 401 });
     }
 
     const details = log.details as {
@@ -103,15 +108,19 @@ export async function POST(req: Request) {
       expiresAt: number;
     };
 
-    if (Date.now() > Number(details.expiresAt)) {
-      return jsonError("Code expirado.", 401);
+    if (Date.now() > details.expiresAt) {
+      return NextResponse.json({ error: "Code expirado." }, { status: 401 });
     }
 
-    if (details.redirectUri !== redirectUri) {
-      return jsonError("redirect_uri não confere.", 401, {
-        expected: details.redirectUri,
-        received: redirectUri,
-      });
+    if (details.redirectUri !== redirect_uri) {
+      return NextResponse.json(
+        {
+          error: "redirect_uri não confere.",
+          expected: details.redirectUri,
+          received: redirect_uri,
+        },
+        { status: 401 },
+      );
     }
 
     await prisma.auditLog.update({
@@ -127,18 +136,13 @@ export async function POST(req: Request) {
       expires_in: 604800,
     });
   } catch (error) {
-    console.error("[Deas OAuth Token] Erro ao trocar code por token:", error);
-    return jsonError("Erro interno ao trocar code por token no Deas Finance.", 500);
+    console.error("Erro na rota /api/oauth/token:", error);
+    return NextResponse.json(
+      {
+        error: "Erro interno no token do Deas Finance.",
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
 }
