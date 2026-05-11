@@ -96,10 +96,18 @@ export async function POST(req: Request) {
   if (realOAuth) {
     // OAuth2 real — redireciona para autenticação no banco externo
     const clientId = process.env[realOAuth.clientIdEnv] ?? "";
+
+    if (!clientId) {
+      return fail(`LARABANK_CLIENT_ID não está configurado na Vercel do Deas Finance.`);
+    }
+
     const params = new URLSearchParams({
       client_id:     clientId,
+      clientId:      clientId,
       redirect_uri:  redirectUri,
+      redirectUri:   redirectUri,
       response_type: "code",
+      responseType:  "code",
       scope:         realOAuth.scopes,
       state:         oauthState,
     });

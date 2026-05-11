@@ -2,14 +2,12 @@
  * Adaptador específico para o Larabank.
  *
  * Implementa OAuth2 real (Authorization Code Flow) com o Larabank.
- *
- * Endpoints OAuth esperados no Larabank:
- *   GET  {LARABANK_API_BASE_URL}/open-finance/authorize
- *   POST {LARABANK_API_BASE_URL}/api/open-finance/token
- *   GET  {LARABANK_API_BASE_URL}/api/open-finance/provider/accounts
- *
- * Este adaptador também tenta rotas alternativas de dados para não quebrar
- * quando o banco parceiro expõe /provider em vez de /provider/accounts.
+ * Esta versão é tolerante a pequenas diferenças entre projetos:
+ * - /api/oauth/authorize ou /open-finance/authorize
+ * - /api/oauth/token ou /api/open-finance/token
+ * - payload snake_case ou camelCase
+ * - JSON ou application/x-www-form-urlencoded
+ * - client_secret vindo de LARABANK_CLIENT_SECRET, LARABANK_API_SECRET ou API_SECRET
  */
 
 import type { BankAdapter, OpenFinanceAccountData } from "../types";
@@ -17,24 +15,43 @@ import type { BankAdapter, OpenFinanceAccountData } from "../types";
 const LARABANK_API_BASE_URL =
   process.env.LARABANK_API_BASE_URL ?? "https://larabankdigital2.vercel.app";
 
-const LARABANK_CLIENT_ID     = process.env.LARABANK_CLIENT_ID ?? "";
-const LARABANK_CLIENT_SECRET = process.env.LARABANK_CLIENT_SECRET ?? "";
+const LARABANK_CLIENT_ID =
+  process.env.LARABANK_CLIENT_ID ??
+  process.env.LARABANK_API_CLIENT_ID ??
+  process.env.LARABANK_OAUTH_CLIENT_ID ??
+  "";
+
+const LARABANK_CLIENT_SECRET =
+  process.env.LARABANK_CLIENT_SECRET ??
+  process.env.LARABANK_API_SECRET ??
+  process.env.LARABANK_API_CLIENT_SECRET ??
+  process.env.LARABANK_OAUTH_CLIENT_SECRET ??
+  process.env.API_SECRET ??
+  "";
 
 function cleanBaseUrl(url: string) {
   return url.replace(/\/+$/, "");
 }
 
-/** URL de autorização OAuth do Larabank */
-export const LARABANK_AUTH_URL = `${cleanBaseUrl(LARABANK_API_BASE_URL)}/open-finance/authorize`;
+const LARABANK_BASE = cleanBaseUrl(LARABANK_API_BASE_URL);
+
+/**
+ * URL de autorização OAuth do Larabank.
+ * Preferência:
+ * 1. LARABANK_AUTH_URL explícita na Vercel
+ * 2. /api/oauth/authorize, que é a rota usada pelo provider OAuth deste projeto
+ */
+export const LARABANK_AUTH_URL =
+  process.env.LARABANK_AUTH_URL ?? `${LARABANK_BASE}/api/oauth/authorize`;
 
 /**
  * Rotas possíveis de token do Larabank.
- * Alguns projetos expõem /api/open-finance/token, outros expõem /api/oauth/token.
  */
 const LARABANK_TOKEN_URLS = [
-  `${cleanBaseUrl(LARABANK_API_BASE_URL)}/api/open-finance/token`,
-  `${cleanBaseUrl(LARABANK_API_BASE_URL)}/api/oauth/token`,
-];
+  process.env.LARABANK_TOKEN_URL,
+  `${LARABANK_BASE}/api/oauth/token`,
+  `${LARABANK_BASE}/api/open-finance/token`,
+].filter(Boolean) as string[];
 
 /** URL principal de troca de code por token do Larabank */
 export const LARABANK_TOKEN_URL = LARABANK_TOKEN_URLS[0];
@@ -65,15 +82,33 @@ function pickExpiresIn(data: any) {
   return data?.expires_in ?? data?.expiresIn ?? data?.data?.expires_in ?? data?.data?.expiresIn;
 }
 
-async function postTokenRequest(url: string, payload: Record<string, string>, mode: "json" | "form") {
+function compactPayload(payload: Record<string, string | undefined>) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== undefined && value !== "")
+  ) as Record<string, string>;
+}
+
+async function postTokenRequest(
+  url: string,
+  payload: Record<string, string>,
+  mode: "json" | "form",
+  useBasicAuth: boolean
+) {
   const body = mode === "json" ? JSON.stringify(payload) : new URLSearchParams(payload).toString();
+
+  const headers: Record<string, string> = {
+    "Content-Type": mode === "json" ? "application/json" : "application/x-www-form-urlencoded",
+    Accept: "application/json",
+  };
+
+  if (useBasicAuth && LARABANK_CLIENT_ID && LARABANK_CLIENT_SECRET) {
+    headers.Authorization =
+      "Basic " + Buffer.from(`${LARABANK_CLIENT_ID}:${LARABANK_CLIENT_SECRET}`).toString("base64");
+  }
 
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": mode === "json" ? "application/json" : "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
+    headers,
     body,
     cache: "no-store",
   });
@@ -91,51 +126,81 @@ async function postTokenRequest(url: string, payload: Record<string, string>, mo
 
 /**
  * Troca o authorization code por um access token no Larabank.
- * Chamado pelo callback route após o redirecionamento OAuth.
  */
 export async function exchangeCodeForToken(
   code: string,
   redirectUri: string
 ): Promise<{ accessToken: string; refreshToken?: string; expiresIn?: number }> {
-  const payload = {
-    grant_type:    "authorization_code",
-    client_id:     LARABANK_CLIENT_ID,
-    client_secret: LARABANK_CLIENT_SECRET,
-    redirect_uri:  redirectUri,
-    code,
-  };
+  if (!LARABANK_CLIENT_ID || !LARABANK_CLIENT_SECRET) {
+    throw {
+      code: "MISSING_LARABANK_CREDENTIALS",
+      message:
+        "Credenciais do Larabank ausentes. Configure LARABANK_CLIENT_ID e LARABANK_CLIENT_SECRET na Vercel do Deas Finance.",
+    };
+  }
+
+  const payloads = [
+    compactPayload({
+      grant_type: "authorization_code",
+      client_id: LARABANK_CLIENT_ID,
+      client_secret: LARABANK_CLIENT_SECRET,
+      redirect_uri: redirectUri,
+      code,
+    }),
+    compactPayload({
+      grantType: "authorization_code",
+      clientId: LARABANK_CLIENT_ID,
+      clientSecret: LARABANK_CLIENT_SECRET,
+      redirectUri,
+      code,
+    }),
+    compactPayload({
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code,
+    }),
+  ];
 
   let lastError = "";
+  const attempts: string[] = [];
 
   for (const tokenUrl of LARABANK_TOKEN_URLS) {
-    for (const mode of ["json", "form"] as const) {
-      const { res, text, json } = await postTokenRequest(tokenUrl, payload, mode);
+    for (const payload of payloads) {
+      for (const mode of ["json", "form"] as const) {
+        for (const useBasicAuth of [false, true]) {
+          const { res, text, json } = await postTokenRequest(tokenUrl, payload, mode, useBasicAuth);
+          const authMode = useBasicAuth ? "basic" : "body";
+          const bodyMsg = json?.message ?? json?.error ?? json?.detail ?? text;
+          attempts.push(`${res.status} ${tokenUrl} ${mode}/${authMode}${bodyMsg ? ` - ${String(bodyMsg).slice(0, 160)}` : ""}`);
 
-      if (res.ok) {
-        const accessToken = pickAccessToken(json);
-        if (!accessToken) {
-          lastError = `${res.status} em ${tokenUrl} (${mode}) - resposta sem access_token: ${text.slice(0, 300)}`;
-          continue;
+          if (res.ok) {
+            const accessToken = pickAccessToken(json);
+            if (!accessToken) {
+              lastError = `${res.status} em ${tokenUrl} (${mode}/${authMode}) - resposta sem access_token: ${text.slice(0, 300)}`;
+              continue;
+            }
+
+            return {
+              accessToken,
+              refreshToken: pickRefreshToken(json),
+              expiresIn: pickExpiresIn(json),
+            };
+          }
+
+          lastError = `${res.status} em ${tokenUrl} (${mode}/${authMode})${bodyMsg ? ` - ${String(bodyMsg).slice(0, 300)}` : ""}`;
+
+          // Se a rota não existe, não adianta testar todos os formatos nela.
+          if (res.status === 404 || res.status === 405) break;
         }
-
-        return {
-          accessToken,
-          refreshToken: pickRefreshToken(json),
-          expiresIn: pickExpiresIn(json),
-        };
       }
-
-      const bodyMsg = json?.message ?? json?.error ?? text;
-      lastError = `${res.status} em ${tokenUrl} (${mode})${bodyMsg ? ` - ${String(bodyMsg).slice(0, 300)}` : ""}`;
-
-      // Rota inexistente ou método incompatível: tenta a próxima rota.
-      if (res.status === 404 || res.status === 405) break;
     }
   }
 
   throw {
-    code:    "TOKEN_EXCHANGE_FAILED",
-    message: `Larabank rejeitou a troca de code por token. Última tentativa: ${lastError}`,
+    code: "TOKEN_EXCHANGE_FAILED",
+    message:
+      `Larabank rejeitou a troca de code por token. Última tentativa: ${lastError}. ` +
+      `Tentativas: ${attempts.slice(-8).join(" | ")}`,
   };
 }
 
@@ -149,14 +214,6 @@ function toNumber(...values: unknown[]) {
 }
 
 function unwrapAccountPayload(data: any) {
-  /**
-   * Aceita todos estes formatos:
-   * { account: {...} }
-   * { data: { account: {...} } }
-   * { data: {...} }
-   * { ok: true, account: {...} }
-   * {...camposDaConta}
-   */
   return data?.account ?? data?.data?.account ?? data?.data ?? data;
 }
 
@@ -224,7 +281,7 @@ async function fetchJsonWithBearer(url: string, accessToken: string) {
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Accept:        "application/json",
+      Accept: "application/json",
     },
     cache: "no-store",
   });
@@ -264,10 +321,9 @@ export const larabankAdapter: BankAdapter = {
         return normalizeAccountData(json);
       }
 
-      const bodyMsg = json?.message ?? json?.error ?? text;
+      const bodyMsg = json?.message ?? json?.error ?? json?.detail ?? text;
       lastError = `${res.status} em ${url}${bodyMsg ? ` - ${String(bodyMsg).slice(0, 300)}` : ""}`;
 
-      // 404/405 significa rota incompatível: tenta a próxima rota conhecida.
       if (res.status === 404 || res.status === 405) continue;
 
       if (res.status === 401) {
@@ -299,10 +355,10 @@ export const larabankAdapter: BankAdapter = {
     try {
       const base = cleanBaseUrl(apiBaseUrl || LARABANK_API_BASE_URL);
       await fetch(`${base}/api/consents/${consentId}`, {
-        method:  "DELETE",
+        method: "DELETE",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          Accept:        "application/json",
+          Accept: "application/json",
         },
       });
     } catch {
